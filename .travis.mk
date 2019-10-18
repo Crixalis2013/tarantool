@@ -3,9 +3,13 @@
 #
 
 DOCKER_IMAGE?=packpack/packpack:debian-stretch
+DOCKER_TEST_IMAGE?=registry.gitlab.com/tarantool/tarantool/testing/debian-stretch:latest
 TEST_RUN_EXTRA_PARAMS?=
 MAX_FILES?=65534
 MAX_PROC?=2500
+OOS_SRC_PATH?=/source
+OOS_BUILD_PATH?=/rw_bins
+OOS_BUILD_RULE?=test_oos_no_deps
 
 all: package
 
@@ -146,6 +150,28 @@ test_static_build: deps_debian_static
 
 test_static_docker_build:
 	docker build --no-cache --network=host --build-arg RUN_TESTS=ON -f Dockerfile.staticbuild .
+
+# Out-Of-Source build
+
+build_oos:
+	mkdir ${OOS_BUILD_PATH} 2>/dev/null || : ; \
+		cd ${OOS_BUILD_PATH} && \
+		cmake ${OOS_SRC_PATH} ${CMAKE_EXTRA_PARAMS} && \
+		make -j
+
+test_oos_no_deps: build_oos
+	cd ${OOS_BUILD_PATH}/test && \
+		OUTOFSRC_BUILD=ON ${OOS_SRC_PATH}/test/test-run.py \
+			--builddir ${OOS_BUILD_PATH} \
+			--vardir ${OOS_BUILD_PATH}/test/var --force
+
+test_oos: deps_debian test_oos_no_deps
+
+test_oos_build:
+	docker run --network=host -w ${OOS_SRC_PATH} \
+		--mount type=bind,source="${PWD}",target=${OOS_SRC_PATH},readonly,bind-propagation=rslave \
+		-i ${DOCKER_TEST_IMAGE} \
+		make -f .travis.mk ${OOS_BUILD_RULE}
 
 #######
 # OSX #
