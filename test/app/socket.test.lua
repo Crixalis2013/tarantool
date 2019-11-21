@@ -300,8 +300,16 @@ sc:close()
 
 -- tcp_connect
 
--- test timeout
-socket.tcp_connect('127.0.0.1', 80, 0.00000000001)
+-- Test timeout. In this test, tcp_connect can return the second
+-- output value from internal.getaddrinfo (usually on Mac OS, but
+-- theoretically it can happen on Linux too). Sometimes
+-- getaddrinfo() is timed out, sometimes connect. On Linux however
+-- getaddrinfo is fast enough to never give timeout error in
+-- the case. So, there are two sources of timeout errors that are
+-- reported differently. This difference has appeared after
+-- gh-4138 patch.
+s, err = socket.tcp_connect('127.0.0.1', 80, 0.00000000001)
+s == nil
 
 -- AF_INET
 s = socket('AF_INET', 'SOCK_STREAM', 'tcp')
@@ -987,9 +995,44 @@ s:settimeout(1)
 s:receive('*a')
 s:close()
 srv:close()
+
 --
 -- gh-4087: fix error while closing socket.tcp_server
 --
 srv = socket.tcp_server('127.0.0.1', 0, function() end)
 srv:close()
 test_run:wait_log('default', 'stopped', 1024, 0.01)
+
+-- gh-4138 Check getaddrinfo() error from socket:connect() only.
+-- Error code and error message returned by getaddrinfo() depends
+-- on system's gai_strerror().
+test_run:cmd("setopt delimiter ';'")
+function check_err(err)
+-- EAI_NONAME
+    if err == 'getaddrinfo: nodename nor servname provided, or not known' or
+-- EAI_SERVICE
+       err == 'getaddrinfo: Servname not supported for ai_socktype' or
+-- EAI_NONAME
+       err == 'getaddrinfo: Name or service not known' or
+-- EAI_NONAME
+       err == 'getaddrinfo: hostname nor servname provided, or not known' or
+-- EAI_AGAIN
+       err == 'getaddrinfo: Temporary failure in name resolution' or
+-- EAI_AGAIN
+       err == 'getaddrinfo: Name could not be resolved at this time' then
+        return true
+    end
+    return false
+end;
+test_run:cmd("setopt delimiter ''");
+
+s, err = socket.getaddrinfo('non_exists_hostname', 3301)
+check_err(err)
+s, err = socket.connect('non_exists_hostname', 3301)
+check_err(err)
+s, err = socket.tcp_connect('non_exists_hostname', 3301)
+check_err(err)
+s, err = socket.bind('non_exists_hostname', 3301)
+check_err(err)
+s, err = socket.tcp_server('non_exists_hostname', 3301, function() end)
+check_err(err)
