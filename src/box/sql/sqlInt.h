@@ -3239,19 +3239,6 @@ int sqlExprIsInteger(Expr *, int *);
 int sqlExprCanBeNull(const Expr *);
 
 /**
- * Return TRUE if the given expression is a constant which would
- * be unchanged by OP_ApplyType with the type given in the second
- * argument.
- *
- * This routine is used to determine if the OP_ApplyType operation
- * can be omitted.  When in doubt return FALSE.  A false negative
- * is harmless. A false positive, however, can result in the wrong
- * answer.
- */
-bool
-sql_expr_needs_no_type_change(const struct Expr *expr, enum field_type type);
-
-/**
  * This routine generates VDBE code that causes a single row of a
  * single table to be deleted.  Both the original table entry and
  * all indices are removed.
@@ -3875,12 +3862,8 @@ int sqlVarintLen(u64 v);
 #define getVarint    sqlGetVarint
 #define putVarint    sqlPutVarint
 
-/** Return string consisting of fields types of given index. */
-enum field_type *
-sql_index_type_str(struct sql *db, const struct index_def *idx_def);
-
 /**
- * Code an OP_ApplyType opcode that will force types
+ * Code an OP_ImplicitCast opcode that will force types
  * for given range of register starting from @reg.
  *
  * @param v VDBE.
@@ -3919,14 +3902,6 @@ expr_cmp_mutual_type(struct Expr *pExpr);
  */
 enum field_type
 sql_expr_type(struct Expr *pExpr);
-
-/**
- * This function duplicates first @len entries of types array
- * and terminates new array with field_type_MAX member.
- */
-enum field_type *
-field_type_sequence_dup(struct Parse *parse, enum field_type *types,
-			uint32_t len);
 
 /**
  * Convert z to a 64-bit signed or unsigned integer.

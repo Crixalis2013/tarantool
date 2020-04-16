@@ -568,11 +568,6 @@ codeEqualityTerm(Parse * pParse,	/* The parsing context */
  * key value of the loop.  If one or more IN operators appear, then
  * this routine allocates an additional nEq memory cells for internal
  * use.
- *
- * Before returning, @types is set to point to a buffer containing a
- * copy of the column types array of the index allocated using
- * sqlDbMalloc(). This array is passed to OP_ApplyType to provide
- * correct implicit conversions.
  */
 static int
 codeAllEqualityTerms(Parse * pParse,	/* Parsing context */

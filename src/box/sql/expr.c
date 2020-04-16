@@ -137,19 +137,6 @@ sql_expr_type(struct Expr *pExpr)
 	return pExpr->type;
 }
 
-enum field_type *
-field_type_sequence_dup(struct Parse *parse, enum field_type *types,
-			uint32_t len)
-{
-	uint32_t sz = (len + 1) * sizeof(enum field_type);
-	enum field_type *ret_types = sqlDbMallocRaw(parse->db, sz);
-	if (ret_types == NULL)
-		return NULL;
-	memcpy(ret_types, types, sz);
-	ret_types[len] = field_type_MAX;
-	return ret_types;
-}
-
 /*
  * Set the collating sequence for expression pExpr to be the collating
  * sequence named by pToken.   Return a pointer to a new Expr node that
@@ -2243,36 +2230,6 @@ sqlExprCanBeNull(const Expr * p)
 		        && p->space_def->fields[p->iColumn].is_nullable);
 	default:
 		return 1;
-	}
-}
-
-bool
-sql_expr_needs_no_type_change(const struct Expr *p, enum field_type type)
-{
-	u8 op;
-	if (type == FIELD_TYPE_SCALAR)
-		return true;
-	while (p->op == TK_UPLUS || p->op == TK_UMINUS) {
-		p = p->pLeft;
-	}
-	op = p->op;
-	if (op == TK_REGISTER)
-		op = p->op2;
-	switch (op) {
-	case TK_INTEGER:
-		return type == FIELD_TYPE_INTEGER;
-	case TK_FLOAT:
-		return type == FIELD_TYPE_DOUBLE;
-	case TK_STRING:
-		return type == FIELD_TYPE_STRING;
-	case TK_BLOB:
-		return type == FIELD_TYPE_VARBINARY;
-	case TK_COLUMN:
-		/* p cannot be part of a CHECK constraint. */
-		assert(p->iTable >= 0);
-		return p->iColumn < 0 && sql_type_is_numeric(type);
-	default:
-		return false;
 	}
 }
 

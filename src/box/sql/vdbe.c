@@ -2907,35 +2907,6 @@ case OP_Fetch: {
 	break;
 }
 
-/* Opcode: ApplyType P1 P2 * P4 *
- * Synopsis: type(r[P1@P2])
- *
- * Apply types to a range of P2 registers starting with P1.
- *
- * P4 is a string that is P2 characters long. The nth character of the
- * string indicates the column type that should be used for the nth
- * memory cell in the range.
- */
-case OP_ApplyType: {
-	enum field_type *types = pOp->p4.types;
-	assert(types != NULL);
-	assert(types[pOp->p2] == field_type_MAX);
-	pIn1 = &aMem[pOp->p1];
-	enum field_type type;
-	while((type = *(types++)) != field_type_MAX) {
-		assert(pIn1 <= &p->aMem[(p->nMem+1 - p->nCursor)]);
-		assert(memIsValid(pIn1));
-		if (mem_apply_type(pIn1, type) != 0) {
-			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-				 sql_value_to_diag_str(pIn1),
-				 field_type_strs[type]);
-			goto abort_due_to_error;
-		}
-		pIn1++;
-	}
-	break;
-}
-
 /* Opcode: ImplicitCast P1 P2 * P4 *
  * Synopsis: type(r[P1@P2])
  *
