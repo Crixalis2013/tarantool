@@ -66,6 +66,13 @@ enum txn_flag {
 	TXN_CAN_YIELD,
 	/** on_commit and/or on_rollback list is not empty. */
 	TXN_HAS_TRIGGERS,
+	/**
+	 * Transaction, touched sync spaces, enters 'waiting for
+	 * acks' state before commit. In this state it waits until
+	 * it is replicated onto a quorum of replicas, and only
+	 * then finishes commit and returns success to a user.
+	 */
+	TXN_WAIT_ACK,
 };
 
 enum {

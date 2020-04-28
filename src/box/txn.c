@@ -495,12 +495,14 @@ txn_journal_entry_new(struct txn *txn)
 
 	struct xrow_header **remote_row = req->rows;
 	struct xrow_header **local_row = req->rows + txn->n_applier_rows;
+	bool is_sync = false;
 
 	stailq_foreach_entry(stmt, &txn->stmts, next) {
 		if (stmt->has_triggers) {
 			txn_init_triggers(txn);
 			rlist_splice(&txn->on_commit, &stmt->on_commit);
 		}
+		is_sync = is_sync || stmt->space->def->opts.is_sync;
 
 		/* A read (e.g. select) request */
 		if (stmt->row == NULL)
@@ -513,6 +515,8 @@ txn_journal_entry_new(struct txn *txn)
 
 		req->approx_len += xrow_approx_len(stmt->row);
 	}
+	if (is_sync)
+		txn_set_flag(txn, TXN_WAIT_ACK);
 
 	assert(remote_row == req->rows + txn->n_applier_rows);
 	assert(local_row == remote_row + txn->n_new_rows);
