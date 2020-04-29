@@ -124,6 +124,7 @@ add_library(box STATIC
     session.cc
     port.c
     txn.c
+    txn_limbo.c
     box.cc
     gc.c
     checkpoint_schedule.c
