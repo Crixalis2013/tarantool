@@ -476,6 +476,19 @@ box_check_replication_sync_lag(void)
 	return lag;
 }
 
+static int
+box_check_replication_synchro_quorum(void)
+{
+	int quorum = cfg_geti("replication_synchro_quorum");
+	if (quorum <= 0 || quorum > VCLOCK_MAX) {
+		diag_set(ClientError, ER_CFG, "replication_synchro_quorum",
+			 "the value must be greater than zero and less than "
+			 "maximal number of replicas");
+		return -1;
+	}
+	return quorum;
+}
+
 static double
 box_check_replication_sync_timeout(void)
 {
@@ -658,6 +671,8 @@ box_check_config()
 	box_check_replication_connect_timeout();
 	box_check_replication_connect_quorum();
 	box_check_replication_sync_lag();
+	if (box_check_replication_synchro_quorum() < 0)
+		diag_raise();
 	box_check_replication_sync_timeout();
 	box_check_readahead(cfg_geti("readahead"));
 	box_check_checkpoint_count(cfg_geti("checkpoint_count"));
@@ -775,6 +790,16 @@ void
 box_set_replication_sync_lag(void)
 {
 	replication_sync_lag = box_check_replication_sync_lag();
+}
+
+int
+box_set_replication_synchro_quorum(void)
+{
+	int value = box_check_replication_synchro_quorum();
+	if (value < 0)
+		return -1;
+	replication_synchro_quorum = value;
+	return 0;
 }
 
 void
@@ -2417,6 +2442,8 @@ box_cfg_xc(void)
 	box_set_replication_connect_timeout();
 	box_set_replication_connect_quorum();
 	box_set_replication_sync_lag();
+	if (box_set_replication_synchro_quorum() != 0)
+		diag_raise();
 	box_set_replication_sync_timeout();
 	box_set_replication_skip_conflict();
 	box_set_replication_anon();
