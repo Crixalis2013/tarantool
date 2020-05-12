@@ -371,7 +371,7 @@ end
 --
 local function swim_member_payload_str(m)
     local ptr = swim_check_member(m, 'member:payload_str()')
-    local cdata, size = swim_member_payload_raw(ptr)
+    local _, size = swim_member_payload_raw(ptr)
     if size > 0 then
         return ffi.string(swim_member_payload_raw(ptr))
     end

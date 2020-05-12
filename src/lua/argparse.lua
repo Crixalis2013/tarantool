@@ -91,7 +91,8 @@ local function convert_parameter(name, convert_from, convert_to)
 end
 
 local function parameters_parse(t_in, options)
-    local t_out, t_in = {}, t_in or {}
+    local t_out = {}
+    t_in = t_in or {}
 
     -- Prepare a lookup table for options. An option name -> a
     -- type name to convert a parameter into or true (which means

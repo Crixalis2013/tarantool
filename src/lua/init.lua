@@ -144,9 +144,9 @@ local function gen_search_func(path_fn, templates, need_traverse)
 
         local searchpaths = {}
 
-        for _, path in ipairs(paths) do
+        for _, p in ipairs(paths) do
             for _, template in pairs(templates) do
-                table.insert(searchpaths, fio.pathjoin(path, template))
+                table.insert(searchpaths, fio.pathjoin(p, template))
             end
         end
 
