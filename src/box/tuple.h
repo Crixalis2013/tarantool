@@ -320,6 +320,8 @@ struct PACKED tuple
 	 * Offset to the MessagePack from the begin of the tuple.
 	 */
 	uint16_t data_offset;
+	/** Engine-specific flags. */
+	uint8_t flags;
 	/**
 	 * Engine specific fields and offsets array concatenated
 	 * with MessagePack fields array.
