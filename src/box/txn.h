@@ -127,6 +127,9 @@ struct txn_stmt {
 	/** Commit/rollback triggers associated with this statement. */
 	struct rlist on_commit;
 	struct rlist on_rollback;
+	/** A list of tx_value_history_entry */
+	struct rlist in_old_value_list;
+	struct rlist in_new_value_list;
 };
 
 /**
@@ -623,6 +626,12 @@ box_txn_savepoint(void);
  */
 API_EXPORT int
 box_txn_rollback_to_savepoint(box_txn_savepoint_t *savepoint);
+
+void
+tx_manager_init();
+
+void
+tx_manager_free();
 
 int
 tx_cause_conflict(struct txn *wreaker, struct txn *victim);

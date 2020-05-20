@@ -35,6 +35,62 @@
 #include <fiber.h>
 #include "xrow.h"
 #include "errinj.h"
+#include "small/mempool.h"
+
+struct tx_value
+{
+	struct tuple* tuple;
+	/*
+	 * We keep a history of a value in several lists of tx statements,
+	 * actually of tx_value_history_entry.
+	 * New statements are added to the end of list.
+	 */
+	/**
+	 * List of committed tx statements that have changed the value.
+	 * These changes must be seen by all txs except those which have
+	 * read-only read views.
+	 * The list is ordered by signature (lsn).
+	 */
+	struct rlist commited;
+	/**
+	 * List of prepared tx statements that have changed the value.
+	 * A prepared tx may rollback and thus must not be seen by other
+	 * txs, but one can expect that those statements will be committed
+	 * very soon.
+	 */
+	struct rlist prepared;
+	/**
+	 * List of tx statements of txs that are in progress now.
+	 * Nobody knows when or whether they'll be committed.
+	 */
+	struct rlist inprogress;
+};
+
+static uint32_t
+tx_value_key_hash(const struct tx_value_key *a)
+{
+
+	return (uint32_t)(((uintptr_t)a->tuple) >> 3);
+}
+
+#define mh_name _value
+#define mh_key_t struct tuple *
+#define mh_node_t struct tx_value
+#define mh_arg_t void *
+#define mh_hash(a, arg) (tx_value_key_hash((a)->tuple))
+#define mh_hash_key(a, arg) (tx_value_key_hash(a))
+#define mh_cmp(a, b, arg) ((a)->tuple != (b)->tuple)
+#define mh_cmp_key(a, b, arg) ((a) != (b)->tuple)
+#define MH_SOURCE
+#include "salad/mhash.h"
+
+struct tx_manager
+{
+	struct mempool tx_value_pool;
+	struct mh_value_t* values;
+};
+
+static struct tx_manager tx_manager_core;
 
 struct tx_conflict_tracker {
 	struct txn *wreaker;
@@ -974,6 +1030,20 @@ txn_on_yield(struct trigger *trigger, void *event)
 	txn_rollback_to_svp(txn, NULL);
 	txn_set_flag(txn, TXN_IS_ABORTED_BY_YIELD);
 	return 0;
+}
+
+void
+tx_manager_init()
+{
+	mempool_create(&tx_manager_core.tx_value_pool,
+		       cord_slab_cache(), sizeof(struct tx_value));
+	tx_manager_core.values = mh_value_new();
+}
+
+void
+tx_manager_free()
+{
+	mh_value_delete(tx_manager_core.values);
 }
 
 int
