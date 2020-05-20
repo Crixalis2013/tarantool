@@ -36,6 +36,7 @@
 #include "trigger.h"
 #include "fiber.h"
 #include "space.h"
+#include "tuple.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -123,6 +124,18 @@ struct txn_stmt {
 	struct space *space;
 	struct tuple *old_tuple;
 	struct tuple *new_tuple;
+	/**
+	 * If new_tuple != NULL and this transaction was not prepared,
+	 * this member holds added story of the new_tuple.
+	 */
+	struct txm_story *add_story;
+	/**
+	 * If new_tuple == NULL and this transaction was not prepared,
+	 * this member holds added story of the old_tuple.
+	 */
+	struct txm_story *del_story;
+	/** Link in txm_story::del_stmt linked list. */
+	struct txn_stmt *next_in_del_list;
 	/** Engine savepoint for the start of this statement. */
 	void *engine_savepoint;
 	/** Redo info: the binary log row */
@@ -282,6 +295,87 @@ struct txn {
 	struct rlist savepoints;
 	struct rlist conflict_list;
 	struct rlist conflicted_by_list;
+};
+
+/**
+ * Pointer to tuple or story.
+ */
+struct txm_story_or_tuple {
+	/** Flag whether it's a story. */
+	bool is_story;
+	union {
+		/** Pointer to story, it must be reverse liked. */
+		struct txm_story *story;
+		/** Smart pointer to tuple: the tuple is referenced if set. */
+		struct tuple *tuple;
+	};
+};
+
+/**
+ * Link that connects a txm_story with older and newer stories of the same
+ * key in index.
+ */
+struct txm_story_link {
+	/** Story that was happened after that story was ended. */
+	struct txm_story *newer_story;
+	/**
+	 * Older story or ancient tuple (so old that its story was lost).
+	 * In case of tuple is can also be NULL.
+	 */
+	struct txm_story_or_tuple older;
+};
+
+/**
+ * A part of a history of a value in space.
+ * It's a story about a tuple, from the point it was added to space to the
+ * point when it was deleted from a space.
+ * All stories are linked into a list of stories of the same key of each index.
+ */
+struct txm_story {
+	/** The story is about this tuple. The tuple is referenced. */
+
+	struct tuple *tuple;
+	/**
+	 * Statement that told this story. Is set to NULL when the statement's
+	 * transaction becomes committed. Can also be NULL if we don't know who
+	 * introduced that story.
+	 */
+	struct txn_stmt *add_stmt;
+	/**
+	 * Prepare sequence number of add_stmt's transaction. Is set when
+	 * the transactions is prepared. Can be 0 if the transaction is
+	 * in progress or we don't know who introduced that story.
+	 */
+	int64_t add_psn;
+	/**
+	 * Statement that ended this story. Is set to NULL when the statement's
+	 * transaction becomes committed. Can also be NULL if the tuple has not
+	 * been deleted yet.
+	 */
+	struct txn_stmt *del_stmt;
+	/**
+	 * Prepare sequence number of del_stmt's transaction. Is set when
+	 * the transactions is prepared. Can be 0 if the transaction is
+	 * in progress or if nobody has deleted the tuple.
+	 */
+	int64_t del_psn;
+	/**
+	 * List of trackers - transactions that has read this tuple.
+	 */
+	struct rlist reader_list;
+	/**
+	 * Link in tx_manager::all_stories
+	 */
+	struct rlist in_all_stories;
+	/**
+	 * Number of indexes in this space - and the count of link[].
+	 */
+	uint32_t index_count;
+	/**
+	 * Link with older and newer stories (and just tuples) for each
+	 * index respectively.
+	 */
+	struct txm_story_link link[];
 };
 
 static inline bool
@@ -651,6 +745,33 @@ tx_manager_free();
 
 int
 txm_cause_conflict(struct txn *wreaker, struct txn *victim);
+
+int
+txm_history_link_stmt(struct txn_stmt *stmt,
+		      struct tuple *old_tuple, struct tuple *new_tuple,
+		      enum dup_replace_mode mode, struct tuple **result);
+
+void
+txm_history_unlink_stmt(struct txn_stmt *stmt);
+
+void
+txm_history_prepare_stmt(struct txn_stmt *stmt);
+
+ssize_t
+txm_history_release_stmt(struct txn_stmt *stmt);
+
+struct tuple *
+txm_tuple_clarify_slow(struct txn *txn, struct tuple *tuple, uint32_t index,
+                       uint32_t mk_index, bool prepared_ok);
+
+static inline struct tuple*
+txm_tuple_clarify(struct txn *txn, struct tuple* tuple, uint32_t index,
+                  uint32_t mk_index, bool prepared_ok)
+{
+	if (!tuple->is_dirty)
+		return tuple;
+	return txm_tuple_clarify_slow(txn, tuple, index, mk_index, prepared_ok);
+}
 
 #if defined(__cplusplus)
 } /* extern "C" */
