@@ -86,6 +86,8 @@ RUN set -x && \
          -DOPENSSL_USE_STATIC_LIBS=ON \
          -DOPENSSL_ROOT_DIR=/usr/local \
          . && \
+    sed 's%#define%#[\\t ]*define%g' -i \
+        /usr/share/cmake/Modules/FindOpenSSL.cmake && \
     make -j && make install
 
 ARG RUN_TESTS
