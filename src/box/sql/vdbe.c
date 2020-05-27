@@ -417,6 +417,147 @@ sql_value_apply_type(
 	mem_apply_type((Mem *) pVal, type);
 }
 
+/**
+ * Check that MEM_type of the mem is compatible with given type.
+ *
+ * @param mem The MEM that contains the value to check.
+ * @param type The type to check.
+ * @retval TRUE if the MEM_type of the value and the given type
+ *         are compatible, FALSE otherwise.
+ */
+static bool
+mem_is_type_compatible(struct Mem *mem, enum field_type type)
+{
+	enum mp_type mp_type = mem_mp_type(mem);
+	assert(mp_type < MP_EXT);
+	return field_mp_plain_type_is_compatible(type, mp_type, true);
+}
+
+/**
+ * Convert the numeric value contained in MEM to double. If the
+ * is_precise flag is set, the conversion will succeed only if it
+ * is lossless.
+ *
+ * @param mem The MEM that contains the numeric value.
+ * @param is_precise Flag.
+ * @retval 0 if the conversion was successful, -1 otherwise.
+ */
+static int
+mem_convert_to_double(struct Mem *mem, bool is_precise)
+{
+	if ((mem->flags & MEM_Real) != 0)
+		return 0;
+	if ((mem->flags & (MEM_Int | MEM_UInt)) == 0)
+		return -1;
+	if ((mem->flags & MEM_Int) != 0) {
+		int64_t i = mem->u.i;
+		double d = (double)i;
+		if (!is_precise || i == (int64_t)d)
+			mem_set_double(mem, d);
+		else
+			return -1;
+	} else {
+		uint64_t u = mem->u.u;
+		double d = (double)u;
+		if (!is_precise || u == (uint64_t)d)
+			mem_set_double(mem, d);
+		else
+			return -1;
+	}
+	mem->field_type = FIELD_TYPE_DOUBLE;
+	return 0;
+}
+
+/**
+ * Convert the numeric value contained in MEM to unsigned. If the
+ * is_precise flag is set, the conversion will succeed only if it
+ * is lossless.
+ *
+ * @param mem The MEM that contains the numeric value.
+ * @param is_precise Flag.
+ * @retval 0 if the conversion was successful, -1 otherwise.
+ */
+static int
+mem_convert_to_unsigned(struct Mem *mem, bool is_precise)
+{
+	if ((mem->flags & MEM_UInt) != 0)
+		return 0;
+	if ((mem->flags & MEM_Int) != 0)
+		return -1;
+	if ((mem->flags & MEM_Real) == 0)
+		return -1;
+	double d = mem->u.r;
+	if (d < 0.0 || d >= (double)UINT64_MAX)
+		return -1;
+	uint64_t u = (uint64_t)d;
+	if (!is_precise || d == (double)u)
+		mem_set_u64(mem, (uint64_t) d);
+	else
+		return -1;
+	mem->field_type = FIELD_TYPE_UNSIGNED;
+	return 0;
+}
+
+/**
+ * Convert the numeric value contained in MEM to integer. If the
+ * is_precise flag is set, the conversion will succeed only if it
+ * is lossless.
+ *
+ * @param mem The MEM that contains the numeric value.
+ * @param is_precise Flag.
+ * @retval 0 if the conversion was successful, -1 otherwise.
+ */
+static int
+mem_convert_to_integer(struct Mem *mem, bool is_precise)
+{
+	if ((mem->flags & (MEM_UInt | MEM_Int)) != 0)
+		return 0;
+	if ((mem->flags & MEM_Real) == 0)
+		return -1;
+	double d = mem->u.r;
+	if (d >= (double)UINT64_MAX || d < (double)INT64_MIN)
+		return -1;
+	if (d < (double)INT64_MAX) {
+		int64_t i = (int64_t)d;
+		if (!is_precise || d == (double)i)
+			mem_set_i64(mem, (int64_t) d);
+		else
+			return -1;
+	} else {
+		uint64_t u = (uint64_t)d;
+		if (!is_precise || d == (double)u)
+			mem_set_u64(mem, (uint64_t) d);
+		else
+			return -1;
+	}
+	mem->field_type = FIELD_TYPE_INTEGER;
+	return 0;
+}
+
+/**
+ * Convert the numeric value contained in MEM to another numeric
+ * type. If the is_precise flag is set, the conversion will
+ * succeed only if it is lossless.
+ *
+ * @param mem The MEM that contains the numeric value.
+ * @param type The type to convert to.
+ * @param is_precise Flag.
+ * @retval 0 if the conversion was successful, -1 otherwise.
+ */
+static int
+mem_convert_to_numeric(struct Mem *mem, enum field_type type, bool is_precise)
+{
+	assert(mp_type_is_numeric(mem_mp_type(mem)) &&
+	       sql_type_is_numeric(type));
+	assert(type != FIELD_TYPE_NUMBER);
+	if (type == FIELD_TYPE_DOUBLE)
+		return mem_convert_to_double(mem, is_precise);
+	if (type == FIELD_TYPE_UNSIGNED)
+		return mem_convert_to_unsigned(mem, is_precise);
+	assert(type == FIELD_TYPE_INTEGER);
+	return mem_convert_to_integer(mem, is_precise);
+}
+
 /*
  * pMem currently only holds a string type (or maybe a BLOB that we can
  * interpret as a string if we want to).  Compute its corresponding
@@ -2769,6 +2910,39 @@ case OP_ApplyType: {
 			goto abort_due_to_error;
 		}
 		pIn1++;
+	}
+	break;
+}
+
+/* Opcode: ImplicitCast P1 P2 * P4 *
+ * Synopsis: type(r[P1@P2])
+ *
+ * Check that types of P2 registers starting from register
+ * P1 are compatible with given field types in P4.
+ * If the MEM_type of the value and the given type are
+ * incompatible according to field_mp_plain_type_is_compatible(),
+ * but both are numeric, this opcode attempts to convert the value
+ * to the type.
+ */
+case OP_ImplicitCast: {
+	enum field_type *types = pOp->p4.types;
+	assert(types != NULL);
+	assert(types[pOp->p2] == field_type_MAX);
+	for (int i = 0; types[i] != field_type_MAX; ++i) {
+		enum field_type type = types[i];
+		pIn1 = &aMem[pOp->p1 + i];
+		assert(pIn1 <= &p->aMem[(p->nMem+1 - p->nCursor)]);
+		assert(memIsValid(pIn1));
+		if (mem_is_type_compatible(pIn1, type))
+			continue;
+		if (!mp_type_is_numeric(mem_mp_type(pIn1)) ||
+		    !sql_type_is_numeric(type) ||
+		    mem_convert_to_numeric(pIn1, type, false) != 0) {
+			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+				 sql_value_to_diag_str(pIn1),
+				 field_type_strs[type]);
+			goto abort_due_to_error;
+		}
 	}
 	break;
 }

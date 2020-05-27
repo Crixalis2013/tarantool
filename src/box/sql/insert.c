@@ -69,7 +69,7 @@ sql_emit_table_types(struct Vdbe *v, struct space_def *def, int reg)
 	for (uint32_t i = 0; i < field_count; ++i)
 		colls_type[i] = def->fields[i].type;
 	colls_type[field_count] = field_type_MAX;
-	sqlVdbeAddOp4(v, OP_ApplyType, reg, field_count, 0,
+	sqlVdbeAddOp4(v, OP_ImplicitCast, reg, field_count, 0,
 			  (char *)colls_type, P4_DYNAMIC);
 }
 

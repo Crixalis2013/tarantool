@@ -560,6 +560,8 @@ enum mp_type
 mem_mp_type(struct Mem *mem);
 
 #define mp_type_is_bloblike(X) ((X) == MP_BIN || (X) == MP_ARRAY || (X) == MP_MAP)
+#define mp_type_is_numeric(X) ((X) == MP_INT || (X) == MP_UINT ||\
+			       (X) == MP_DOUBLE)
 
 /**
  * Memory cell mem contains the context of an aggregate function.
