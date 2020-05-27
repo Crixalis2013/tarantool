@@ -354,7 +354,7 @@ test:do_test(
         return exec_neph(" SELECT y IN (SELECT a FROM t1) FROM t2 ")
     end, {
         -- <in3-3.5>
-        1, true
+        1, false
         -- </in3-3.5>
     })
 
@@ -378,7 +378,7 @@ test:do_test(
         return exec_neph(" SELECT y IN (SELECT c FROM t1) FROM t2 ")
     end, {
         -- <in3-3.7>
-        1, true
+        1, false
         -- </in3-3.7>
     })
 
