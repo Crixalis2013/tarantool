@@ -112,24 +112,16 @@ test:do_execsql_test(
     -- </whereB-1.102>
     })
 
--- For this set of tests:
---
---  *   t1.y holds a text value with affinity TEXT
---  *   t2.b holds an integer value with affinity NONE
---
--- These values are not equal and because neither affinity is NUMERIC
--- no type conversion occurs.
---
 test:do_execsql_test(
     "whereB-2.1",
     [[
         DROP TABLE t1;
         DROP TABLE t2;
 
-        CREATE TABLE t1(x  INT primary key, y TEXT);    -- affinity of t1.y is TEXT
-        INSERT INTO t1 VALUES(1,99);
+        CREATE TABLE t1(x  INT primary key, y TEXT);
+        INSERT INTO t1 VALUES(1,'99');
 
-        CREATE TABLE t2(a  INT primary key, b SCALAR);  -- affinity of t2.b is NONE
+        CREATE TABLE t2(a  INT primary key, b SCALAR);
         CREATE INDEX t2b ON t2(b);
         INSERT INTO t2 VALUES(2, 99);
 

@@ -225,6 +225,33 @@ sql_value_type(sql_value *pVal)
 	}
 }
 
+enum mp_type
+mem_mp_type(struct Mem *mem)
+{
+	switch (mem->flags & MEM_PURE_TYPE_MASK) {
+	case MEM_Int:
+		return MP_INT;
+	case MEM_UInt:
+		return MP_UINT;
+	case MEM_Real:
+		return MP_DOUBLE;
+	case MEM_Str:
+		return MP_STR;
+	case MEM_Blob:
+		if ((mem->flags & MEM_Subtype) == 0 ||
+		    mem->subtype != SQL_SUBTYPE_MSGPACK)
+			return MP_BIN;
+		assert(mp_typeof(*mem->z) == MP_MAP ||
+		       mp_typeof(*mem->z) == MP_ARRAY);
+		return mp_typeof(*mem->z);
+	case MEM_Bool:
+		return MP_BOOL;
+	case MEM_Null:
+		return MP_NIL;
+	default: unreachable();
+	}
+}
+
 /* Make a copy of an sql_value object
  */
 sql_value *

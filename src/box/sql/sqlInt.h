@@ -397,6 +397,15 @@ sql_value_to_diag_str(sql_value *value);
 enum mp_type
 sql_value_type(sql_value *);
 
+/*
+ * Return the MP_type of the value of the MEM.
+ *
+ * @param mem MEM with the correct MEM_type.
+ * @retval MP_type of the value.
+ */
+enum mp_type
+mem_mp_type(struct Mem *mem);
+
 static inline bool
 sql_value_is_null(sql_value *value)
 {
