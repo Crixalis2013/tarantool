@@ -3179,7 +3179,7 @@ sqlExprCodeIN(Parse * pParse,	/* Parsing and code generating context */
 	 * true.
 	 */
 	zAff[nVector] = field_type_MAX;
-	sqlVdbeAddOp4(v, OP_ApplyType, rLhs, nVector, 0, (char*)zAff,
+	sqlVdbeAddOp4(v, OP_ImplicitCast, rLhs, nVector, 0, (char*)zAff,
 			  P4_DYNAMIC);
 	/*
 	 * zAff will be freed at the end of VDBE execution, since
