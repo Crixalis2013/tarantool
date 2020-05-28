@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(510)
+test:plan(509)
 
 --!./tcltestrunner.lua
 -- 2010 July 16
@@ -2150,7 +2150,6 @@ test:do_select_tests(
         {"2", "SELECT b FROM f1 ORDER BY a LIMIT 2+3 ", {"a",  "b", "c", "d", "e"}},
         {"3", "SELECT b FROM f1 ORDER BY a LIMIT (SELECT a FROM f1 WHERE b = 'e') ", {"a",  "b", "c", "d", "e"}},
         {"4", "SELECT b FROM f1 ORDER BY a LIMIT 5.0 ", {"a",  "b", "c", "d", "e"}},
-        {"5", "SELECT b FROM f1 ORDER BY a LIMIT '5' ", {"a",  "b", "c", "d", "e"}},
     })
 
 -- EVIDENCE-OF: R-46155-47219 If the expression evaluates to a NULL value
@@ -2195,7 +2194,7 @@ test:do_select_tests(
         {"1", "SELECT b FROM f1 ORDER BY a LIMIT 0 ", {}},
         {"2", "SELECT b FROM f1 ORDER BY a DESC LIMIT 4 ", {"z", "y", "x", "w"}},
         {"3", "SELECT b FROM f1 ORDER BY a DESC LIMIT 8 ", {"z", "y", "x", "w", "v", "u", "t", "s"}},
-        {"4", "SELECT b FROM f1 ORDER BY a DESC LIMIT '12' ", {"z", y, "x", "w", "v", "u", "t", "s", "r", "q", "p", "o"}},
+        {"4", "SELECT b FROM f1 ORDER BY a DESC LIMIT 12 ", {"z", y, "x", "w", "v", "u", "t", "s", "r", "q", "p", "o"}},
     })
 
 -- EVIDENCE-OF: R-54935-19057 Or, if the SELECT statement would return
@@ -2240,10 +2239,10 @@ test:do_select_tests(
         {"1", "SELECT b FROM f1 ORDER BY a LIMIT 10 OFFSET 5", {"f", "g", "h", "i", "j", "k", "l", "m", "n", "o"}},
         {"2", "SELECT b FROM f1 ORDER BY a LIMIT 2+3 OFFSET 10", {"k", "l", "m", "n", "o"}},
         {"3", "SELECT b FROM f1 ORDER BY a LIMIT  (SELECT a FROM f1 WHERE b='j') OFFSET (SELECT a FROM f1 WHERE b='b') ", {"c", "d", "e", "f", "g", "h", "i", "j", "k", "l"}},
-        {"4", "SELECT b FROM f1 ORDER BY a LIMIT '5' OFFSET 3.0 ", {"d", "e", "f", "g", "h"}},
-        {"5", "SELECT b FROM f1 ORDER BY a LIMIT '5' OFFSET 0 ", {"a", "b", "c", "d", "e"}},
+        {"4", "SELECT b FROM f1 ORDER BY a LIMIT 5 OFFSET 3.0 ", {"d", "e", "f", "g", "h"}},
+        {"5", "SELECT b FROM f1 ORDER BY a LIMIT 5 OFFSET 0 ", {"a", "b", "c", "d", "e"}},
         {"6", "SELECT b FROM f1 ORDER BY a LIMIT 0 OFFSET 10 ", {}},
-        {"7", "SELECT b FROM f1 ORDER BY a LIMIT 3 OFFSET '1'||'5' ", {"p", "q", "r"}},
+        {"7", "SELECT b FROM f1 ORDER BY a LIMIT 3 OFFSET CAST('1'||'5' AS INTEGER) ", {"p", "q", "r"}},
     })
 
 -- EVIDENCE-OF: R-34648-44875 Or, if the SELECT would return less than
@@ -2279,10 +2278,10 @@ test:do_select_tests(
         {"1", "SELECT b FROM f1 ORDER BY a LIMIT 5, 10 ", {"f", "g", "h", "i", "j", "k", "l", "m", "n", "o"}},
         {"2", "SELECT b FROM f1 ORDER BY a LIMIT 10, 2+3 ", {"k", "l", "m", "n", "o"}},
         {"3", "SELECT b FROM f1 ORDER BY a LIMIT (SELECT a FROM f1 WHERE b='b'), (SELECT a FROM f1 WHERE b='j')", {"c", "d", "e", "f", "g", "h", "i", "j", "k", "l"}},
-        {"4", "SELECT b FROM f1 ORDER BY a LIMIT 3.0, '5' ", {"d", "e", "f", "g", "h"}},
-        {"5", "SELECT b FROM f1 ORDER BY a LIMIT 0, '5' ", {"a", "b", "c", "d", "e"}},
+        {"4", "SELECT b FROM f1 ORDER BY a LIMIT 3.0, 5 ", {"d", "e", "f", "g", "h"}},
+        {"5", "SELECT b FROM f1 ORDER BY a LIMIT 0, 5 ", {"a", "b", "c", "d", "e"}},
         {"6", "SELECT b FROM f1 ORDER BY a LIMIT 10, 0 ", {}},
-        {"7", "SELECT b FROM f1 ORDER BY a LIMIT '1'||'5', 3 ", {"p", "q", "r"}},
+        {"7", "SELECT b FROM f1 ORDER BY a LIMIT CAST('1'||'5' AS INTEGER), 3 ", {"p", "q", "r"}},
         {"8", "SELECT b FROM f1 ORDER BY a LIMIT 20, 10 ", {"u", "v", "w", "x", "y", "z"}},
         {"9", "SELECT a FROM f1 ORDER BY a DESC LIMIT 18+4, 100 ", {4, 3, 2, 1}},
         {"10", "SELECT b FROM f1 ORDER BY a LIMIT 0, 5 ", {"a", "b", "c", "d", "e"}},

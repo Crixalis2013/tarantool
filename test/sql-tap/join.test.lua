@@ -1034,7 +1034,6 @@ test:do_execsql_test(
         SELECT * FROM t1 NATURAL JOIN t2 
     ]], {
         -- <join-11.9>
-        "one", "1", "two", "2"
         -- </join-11.9>
     })
 

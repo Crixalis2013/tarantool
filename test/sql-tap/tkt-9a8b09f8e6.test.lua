@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(49)
+test:plan(47)
 
 --!./tcltestrunner.lua
 -- 2014 June 26
@@ -189,18 +189,7 @@ test:do_execsql_test(
         SELECT x FROM t2 WHERE x IN ('1');
     ]], {
         -- <3.3>
-        1
         -- </3.3>
-    })
-
-test:do_execsql_test(
-    3.4,
-    [[
-        SELECT x FROM t2 WHERE x IN ('1');
-    ]], {
-        -- <3.4>
-        1
-        -- </3.4>
     })
 
 test:do_execsql_test(
@@ -229,18 +218,7 @@ test:do_execsql_test(
         SELECT x FROM t2 WHERE '1' IN (x);
     ]], {
         -- <3.7>
-        1
         -- </3.7>
-    })
-
-test:do_execsql_test(
-    3.8,
-    [[
-        SELECT x FROM t2 WHERE '1' IN (x);
-    ]], {
-        -- <3.8>
-        1
-        -- </3.8>
     })
 
 test:do_execsql_test(
