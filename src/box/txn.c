@@ -37,9 +37,27 @@
 #include "errinj.h"
 #include "small/mempool.h"
 
+
+static void
+multilink_init(struct multilink *link, size_t id)
+{
+	rlist_create(&link->link);
+	link->id = id;
+}
+
+static struct txn_stmt *
+stmt_by_multilink(struct multilink *link)
+{
+
+	if (link->id == 0)
+		return rlist_entry(link, struct txn_stmt, in_old_value_list);
+	else
+		return rlist_entry(link, struct txn_stmt, in_new_value_list);
+}
+
 struct tx_value
 {
-	struct tuple* tuple;
+	struct tuple *tuple;
 	/*
 	 * We keep a history of a value in several lists of tx statements,
 	 * actually of tx_value_history_entry.
@@ -49,12 +67,12 @@ struct tx_value
 	 * List of committed tx statements that have changed the value.
 	 * These changes must be seen by all txs except those which have
 	 * read-only read views.
-	 * The list is ordered by signature (lsn).
+	 * Does not participate in conflict resolution.
 	 */
 	struct rlist commited;
 	/**
 	 * List of prepared tx statements that have changed the value.
-	 * A prepared tx may rollback and thus must not be seen by other
+	 * A prepared tx may be rolled back and thus must not be seen by other
 	 * txs, but one can expect that those statements will be committed
 	 * very soon.
 	 */
@@ -170,6 +188,8 @@ txn_stmt_new(struct region *region)
 	stmt->engine_savepoint = NULL;
 	stmt->row = NULL;
 	stmt->has_triggers = false;
+	multilink_init(&stmt->in_old_value_list, 0);
+	multilink_init(&stmt->in_new_value_list, 1);
 	return stmt;
 }
 

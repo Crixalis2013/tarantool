@@ -76,6 +76,14 @@ enum {
 	TXN_SUB_STMT_MAX = 3
 };
 
+struct multilink
+{
+	size_t id;
+	struct rlist link;
+};
+
+struct tx_value;
+
 /**
  * Status of a transaction.
  */
@@ -128,8 +136,10 @@ struct txn_stmt {
 	struct rlist on_commit;
 	struct rlist on_rollback;
 	/** A list of tx_value_history_entry */
-	struct rlist in_old_value_list;
-	struct rlist in_new_value_list;
+	struct tx_value *old_value_list;
+	struct tx_value *new_value_list;
+	struct multilink in_old_value_list;
+	struct multilink in_new_value_list;
 };
 
 /**
