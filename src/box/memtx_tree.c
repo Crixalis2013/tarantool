@@ -37,6 +37,7 @@
 #include "fiber.h"
 #include "key_list.h"
 #include "tuple.h"
+#include "txn.h"
 #include <third_party/qsort_arg.h>
 #include <small/mempool.h>
 
@@ -175,7 +176,7 @@ tree_iterator_dummie(struct iterator *iterator, struct tuple **ret)
 }
 
 static int
-tree_iterator_next(struct iterator *iterator, struct tuple **ret)
+tree_iterator_next_base(struct iterator *iterator, struct tuple **ret)
 {
 	struct memtx_tree_index *index =
 		(struct memtx_tree_index *)iterator->index;
@@ -205,7 +206,7 @@ tree_iterator_next(struct iterator *iterator, struct tuple **ret)
 }
 
 static int
-tree_iterator_prev(struct iterator *iterator, struct tuple **ret)
+tree_iterator_prev_base(struct iterator *iterator, struct tuple **ret)
 {
 	struct memtx_tree_index *index =
 		(struct memtx_tree_index *)iterator->index;
@@ -234,7 +235,7 @@ tree_iterator_prev(struct iterator *iterator, struct tuple **ret)
 }
 
 static int
-tree_iterator_next_equal(struct iterator *iterator, struct tuple **ret)
+tree_iterator_next_equal_base(struct iterator *iterator, struct tuple **ret)
 {
 	struct memtx_tree_index *index =
 		(struct memtx_tree_index *)iterator->index;
@@ -270,7 +271,7 @@ tree_iterator_next_equal(struct iterator *iterator, struct tuple **ret)
 }
 
 static int
-tree_iterator_prev_equal(struct iterator *iterator, struct tuple **ret)
+tree_iterator_prev_equal_base(struct iterator *iterator, struct tuple **ret)
 {
 	struct memtx_tree_index *index =
 		(struct memtx_tree_index *)iterator->index;
@@ -303,6 +304,44 @@ tree_iterator_prev_equal(struct iterator *iterator, struct tuple **ret)
 	}
 	return 0;
 }
+
+#define WRAP_ITERATOR_METHOD(name)                                             \
+static int                                                                     \
+name(struct iterator *iterator, struct tuple **ret)                            \
+{                                                                              \
+	struct memtx_tree *tree =                                              \
+		&((struct memtx_tree_index *)iterator->index)->tree;           \
+	struct tree_iterator *it = tree_iterator(iterator);                    \
+	struct memtx_tree_iterator *ti = &it->tree_iterator;                   \
+	uint32_t iid = iterator->index->def->iid;                              \
+	bool is_multikey = iterator->index->def->key_def->is_multikey;         \
+	bool is_rw = in_txn() != NULL;                                         \
+	do {                                                                   \
+		int rc = name##_base(iterator, ret);                           \
+		if (rc != 0 || *ret == NULL)                                   \
+			return rc;                                             \
+		uint32_t mk_index = 0;                                         \
+		if (is_multikey) {                                             \
+			struct memtx_tree_data *check =                        \
+				memtx_tree_iterator_get_elem(tree, ti);        \
+			assert(check != NULL);                                 \
+			mk_index = check->hint;                                \
+		}                                                              \
+		*ret = tx_manager_tuple_clarify(*ret, iid, mk_index, is_rw);   \
+	} while (*ret == NULL);                                                \
+	tuple_unref(it->current.tuple);                                        \
+	it->current.tuple = *ret;                                              \
+	tuple_ref(it->current.tuple);                                          \
+	return 0;                                                              \
+}                                                                              \
+struct forgot_to_add_semicolon
+
+WRAP_ITERATOR_METHOD(tree_iterator_next);
+WRAP_ITERATOR_METHOD(tree_iterator_prev);
+WRAP_ITERATOR_METHOD(tree_iterator_next_equal);
+WRAP_ITERATOR_METHOD(tree_iterator_prev_equal);
+
+#undef WRAP_ITERATOR_METHOD
 
 static void
 tree_iterator_set_next_method(struct tree_iterator *it)
@@ -388,6 +427,20 @@ tree_iterator_start(struct iterator *iterator, struct tuple **ret)
 	tuple_ref(*ret);
 	it->current = *res;
 	tree_iterator_set_next_method(it);
+
+	uint32_t iid = iterator->index->def->iid;
+	bool is_multikey = iterator->index->def->key_def->is_multikey;
+	bool is_rw = in_txn() != NULL;
+	uint32_t mk_index = is_multikey ? res->hint : 0;
+	*ret = tx_manager_tuple_clarify(*ret, iid, mk_index, is_rw);
+	if (*ret == NULL) {
+		return iterator->next(iterator, ret);
+	} else {
+		tuple_unref(it->current.tuple);
+		it->current.tuple = *ret;
+		tuple_ref(it->current.tuple);
+	}
+
 	return 0;
 }
 
@@ -539,7 +592,14 @@ memtx_tree_index_get(struct index *base, const char *key,
 	key_data.part_count = part_count;
 	key_data.hint = key_hint(key, part_count, cmp_def);
 	struct memtx_tree_data *res = memtx_tree_find(&index->tree, &key_data);
-	*result = res != NULL ? res->tuple : NULL;
+	if (res == NULL) {
+		*result = NULL;
+		return 0;
+	}
+	bool is_rw = in_txn() != NULL;
+	uint32_t mk_index = base->def->key_def->is_multikey ? res->hint : 0;
+	*result = tx_manager_tuple_clarify(res->tuple, base->def->iid,
+					   mk_index, is_rw);
 	return 0;
 }
 

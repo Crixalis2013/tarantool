@@ -36,6 +36,7 @@
 #include "trigger.h"
 #include "fiber.h"
 #include "space.h"
+#include "tuple.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -75,6 +76,8 @@ enum {
 	 */
 	TXN_SUB_STMT_MAX = 3
 };
+
+struct tx_value;
 
 /**
  * Status of a transaction.
@@ -127,9 +130,8 @@ struct txn_stmt {
 	/** Commit/rollback triggers associated with this statement. */
 	struct rlist on_commit;
 	struct rlist on_rollback;
-	/** A list of tx_value_history_entry */
-	struct rlist in_old_value_list;
-	struct rlist in_new_value_list;
+	size_t track_count;
+	struct tuple *track[];
 };
 
 /**
@@ -264,6 +266,7 @@ struct txn {
 	uint32_t fk_deferred_count;
 	/** List of savepoints to find savepoint by name. */
 	struct rlist savepoints;
+	struct rlist read_set;
 	struct rlist conflict_list;
 	struct rlist conflicted_by_list;
 };
@@ -633,8 +636,60 @@ tx_manager_init();
 void
 tx_manager_free();
 
+/**
+ * Helper of @sa tx_manager_tuple_clarify
+ */
+struct tuple *
+tx_manager_tuple_clarify_slow(struct tuple *tuple, uint32_t index,
+			      uint32_t mk_index, bool prepared_ok);
+
+/**
+ * Fix a value that was read from index data structure in case it was written
+ * by uncommitted transaction. May return exactly the same tuple, equal tuple
+ * in terms of that index or NULL.
+ *
+ * @param t the tuple
+ * @param index index number
+ * @param mk_index
+ * @return
+ */
+static inline struct tuple *
+tx_manager_tuple_clarify(struct tuple *tuple, uint32_t index, uint32_t mk_index,
+		         bool prepared_ok)
+{
+	if (!tuple_is_dirty(tuple))
+		return tuple;
+	return tx_manager_tuple_clarify_slow(tuple, index, mk_index,
+					     prepared_ok);
+}
+
+int
+tx_track_slow(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del);
+
+static inline int
+tx_track(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
+{
+	if (tuple == NULL)
+		return 0;
+	return tx_track_slow(tuple, stmt, add_or_del);
+}
+
+void
+tx_untrack_slow(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del);
+
+static inline void
+tx_untrack(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
+{
+	if (tuple == NULL)
+		return;
+	tx_untrack_slow(tuple, stmt, add_or_del);
+}
+
 int
 tx_cause_conflict(struct txn *wreaker, struct txn *victim);
+
+int
+tx_track_read(struct tuple *tuple);
 
 #if defined(__cplusplus)
 } /* extern "C" */

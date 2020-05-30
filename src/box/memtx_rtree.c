@@ -40,6 +40,7 @@
 #include "trivia/util.h"
 
 #include "tuple.h"
+#include "txn.h"
 #include "space.h"
 #include "memtx_engine.h"
 
@@ -148,7 +149,15 @@ static int
 index_rtree_iterator_next(struct iterator *i, struct tuple **ret)
 {
 	struct index_rtree_iterator *itr = (struct index_rtree_iterator *)i;
-	*ret = (struct tuple *)rtree_iterator_next(&itr->impl);
+	do {
+		struct tuple *tuple = (struct tuple *)
+			rtree_iterator_next(&itr->impl);
+		if (tuple == NULL)
+			break;
+		uint32_t iid = i->index->def->iid;
+		bool is_rw = in_txn() != NULL;
+		*ret = tx_manager_tuple_clarify(tuple, iid, 0, is_rw);
+	} while (*ret == NULL);
 	return 0;
 }
 
@@ -213,8 +222,19 @@ memtx_rtree_index_get(struct index *base, const char *key,
 		unreachable();
 
 	*result = NULL;
-	if (rtree_search(&index->tree, &rect, SOP_OVERLAPS, &iterator))
-		*result = (struct tuple *)rtree_iterator_next(&iterator);
+	if (!rtree_search(&index->tree, &rect, SOP_OVERLAPS, &iterator)) {
+		rtree_iterator_destroy(&iterator);
+		return 0;
+	}
+	do {
+		struct tuple *tuple = (struct tuple *)
+			rtree_iterator_next(&iterator);
+		if (tuple == NULL)
+			break;
+		uint32_t iid = base->def->iid;
+		bool is_rw = in_txn() != NULL;
+		*result = tx_manager_tuple_clarify(tuple, iid, 0, is_rw);
+	} while (*result == NULL);
 	rtree_iterator_destroy(&iterator);
 	return 0;
 }
