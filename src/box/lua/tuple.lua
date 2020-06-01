@@ -1,7 +1,6 @@
 -- tuple.lua (internal file)
 
 local ffi = require('ffi')
-local yaml = require('yaml')
 local msgpackffi = require('msgpackffi')
 local fun = require('fun')
 local buffer = require('buffer')
@@ -81,7 +80,6 @@ local tuple_encode = function(obj)
         encode_r(tmpbuf, obj, 1)
     elseif type(obj) == "table" then
         encode_array(tmpbuf, #obj)
-        local i
         for i = 1, #obj, 1 do
             encode_r(tmpbuf, obj[i], 1)
         end
@@ -232,7 +230,7 @@ local function tuple_update(tuple, expr)
         error("Usage: tuple:update({ { op, field, arg}+ })")
     end
     local pexpr, pexpr_end = tuple_encode(expr)
-    local tuple = builtin.box_tuple_update(tuple, pexpr, pexpr_end)
+    tuple = builtin.box_tuple_update(tuple, pexpr, pexpr_end)
     if tuple == nil then
         return box.error()
     end
@@ -245,7 +243,7 @@ local function tuple_upsert(tuple, expr)
         error("Usage: tuple:upsert({ { op, field, arg}+ })")
     end
     local pexpr, pexpr_end = tuple_encode(expr)
-    local tuple = builtin.box_tuple_upsert(tuple, pexpr, pexpr_end)
+    tuple = builtin.box_tuple_upsert(tuple, pexpr, pexpr_end)
     if tuple == nil then
         return box.error()
     end
@@ -339,7 +337,7 @@ ffi.metatype(tuple_t, {
 
 ffi.metatype(tuple_iterator_t, {
     __call = tuple_iterator_next;
-    __tostring = function(it) return "<tuple iterator>" end;
+    __tostring = function(self) return "<tuple iterator>" end;
 })
 
 -- Free methods, which are not needed anymore.

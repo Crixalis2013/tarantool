@@ -1,11 +1,12 @@
 std = "luajit"
-globals = {"box", "_TARANTOOL"}
+globals = {"box", "_TARANTOOL", "tonumber64"}
 ignore = {
     "143/debug",  -- Accessing an undefined field of a global variable <debug>.
     "143/string", -- Accessing an undefined field of a global variable <string>.
     "143/table",  -- Accessing an undefined field of a global variable <table>.
     "212/self",   -- Unused argument <self>.
     "411",        -- Redefining a local variable.
+    "412",        -- Redefining an argument.
     "421",        -- Shadowing a local variable.
     "431",        -- Shadowing an upvalue.
     "432",        -- Shadowing an upvalue argument.
@@ -19,7 +20,7 @@ include_files = {
 
 exclude_files = {
     "build/**/*.lua",
-    "src/box/**/*.lua",
+    "src/box/lua/serpent.lua", -- third-party source code
     "test-run/**/*.lua",
     "test/**/*.lua",
     "third_party/**/*.lua",
@@ -46,4 +47,9 @@ files["src/lua/swim.lua"] = {
     ignore = {
         "212/m", -- respect swim module code style.
     },
+}
+files["src/box/lua/console.lua"] = {
+    ignore = {
+        "212", -- https://github.com/tarantool/tarantool/issues/5032
+    }
 }
