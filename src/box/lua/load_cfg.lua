@@ -283,8 +283,8 @@ local dynamic_cfg = {
     sql_cache_size          = private.cfg_set_sql_cache_size,
 }
 
-ifdef_feedback = nil
-ifdef_feedback_set_params = nil
+ifdef_feedback = nil -- luacheck: ignore
+ifdef_feedback_set_params = nil -- luacheck: ignore
 
 --
 -- For some options it is important in which order they are set.
@@ -444,7 +444,7 @@ local function prepare_cfg(cfg, default_cfg, template_cfg,
         elseif v == "" or v == nil then
             -- "" and NULL = ffi.cast('void *', 0) set option to default value
             v = default_cfg[k]
-        elseif template_cfg[k] == 'any' then
+        elseif template_cfg[k] == 'any' then -- luacheck: ignore
             -- any type is ok
         elseif type(template_cfg[k]) == 'table' then
             if type(v) ~= 'table' then
@@ -473,7 +473,6 @@ local function prepare_cfg(cfg, default_cfg, template_cfg,
         else
             local good_types = string.gsub(template_cfg[k], ' ', '');
             if (string.find(',' .. good_types .. ',', ',' .. type(v) .. ',') == nil) then
-                good_types = string.gsub(good_types, ',', ', ');
                 box.error(box.error.CFG, readable_name, "should be one of types "..
                     template_cfg[k])
             end
@@ -576,7 +575,7 @@ for k, v in pairs(box) do
 end
 
 setmetatable(box, {
-    __index = function(table, index)
+    __index = function(table, index) -- luacheck: no unused args
         error(debug.traceback("Please call box.cfg{} first"))
         error("Please call box.cfg{} first")
      end
@@ -601,7 +600,7 @@ local function load_cfg(cfg)
     box_configured = nil
     box.cfg = setmetatable(cfg,
         {
-            __newindex = function(table, index)
+            __newindex = function(table, index) -- luacheck: no unused args
                 error('Attempt to modify a read-only table')
             end,
             __call = locked(reload_cfg),
