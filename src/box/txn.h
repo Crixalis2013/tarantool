@@ -36,6 +36,7 @@
 #include "trigger.h"
 #include "fiber.h"
 #include "space.h"
+#include "tuple.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -642,6 +643,31 @@ tx_manager_init();
 
 void
 tx_manager_free();
+
+/**
+ * Helper of @sa tx_manager_tuple_fix
+ */
+struct tuple *
+tx_manager_tuple_fix_slow(struct tuple *t, uint32_t index, uint32_t mk_index);
+
+/**
+ * Fix a value that was read from index data structure in case it was written
+ * by uncommitted transaction. May return exactly the same tuple, equal tuple
+ * in terms of that index or NULL.
+ *
+ * @param t the tuple
+ * @param index index number
+ * @param mk_index
+ * @return
+ */
+
+struct tuple *
+tx_manager_tuple_fix(struct tuple *t, uint32_t index, uint32_t mk_index)
+{
+	if (t->flags & TUPLE_IS_DIRTY)
+		return t;
+	return tx_manager_tuple_fix_slow(t, index, mk_index);
+}
 
 int
 tx_cause_conflict(struct txn *wreaker, struct txn *victim);

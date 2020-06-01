@@ -85,10 +85,10 @@ struct tx_value
 };
 
 static uint32_t
-tx_value_key_hash(const struct tx_value_key *a)
+tx_value_key_hash(const struct tuple *a)
 {
 
-	return (uint32_t)(((uintptr_t)a->tuple) >> 3);
+	return (uint32_t)(((uintptr_t)a) >> 3);
 }
 
 #define mh_name _value
@@ -1106,4 +1106,19 @@ tx_cause_conflict(struct txn *wreaker, struct txn *victim)
 	rlist_add(&wreaker->conflict_list, &tracker->in_conflict_list);
 	rlist_add(&wreaker->conflicted_by_list, &tracker->in_conflicted_by_list);
 	return 0;
+}
+
+struct tuple *
+tx_manager_tuple_fix_slow(struct tuple *t, uint32_t index, uint32_t mk_index)
+{
+	mh_int_t pos = mh_value_find(tx_manager_core.values, t, NULL);
+	assert(pos != mh_end(tx_manager_core.values));
+	struct tx_value *history = mh_value_node(tx_manager_core.values, pos);
+	struct multilink *multilink;
+	rlist_foreach_entry_reverse(multilink, &history->inprogress, link)
+	{
+		struct txn_stmt *stmt = stmt_by_multilink(multilink);
+		if (stmt->
+		(void)mk_index;
+	}
 }

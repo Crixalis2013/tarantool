@@ -285,6 +285,11 @@ box_tuple_upsert(box_tuple_t *tuple, const char *expr, const char *expr_end);
 
 /** \endcond public */
 
+enum global_tuple_flags
+{
+	TUPLE_IS_DIRTY = 1 << 7
+};
+
 /**
  * An atom of Tarantool storage. Represents MsgPack Array.
  * Tuple has the following structure:
