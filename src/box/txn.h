@@ -127,6 +127,18 @@ struct txn_stmt {
 	struct space *space;
 	struct tuple *old_tuple;
 	struct tuple *new_tuple;
+	/**
+	 * Bit field that shows that the statement replaced the key in
+	 * the corresponding index or not.
+	 * Imagine a space with two unique indexes - by 1s and by 2nd field.
+	 * space:replace{1, 1} -- no replace, all bits are zero.
+	 * space:replace{1, 2} -- replace took place in primary index (bit 1),
+	 * -- but in secondary index it inserted 2 and erased 1 (bit 0).
+	 * space:replace{1, 2, 3} -- both indexes replaced their keys (bit 1).
+	 */
+	uint64_t index_replaced[2];
+	static_assert(sizeof(index_replaced) * CHAR_BIT == BOX_INDEX_MAX,
+		      "Wrong index bitfield size");
 	/** Engine savepoint for the start of this statement. */
 	void *engine_savepoint;
 	/** Redo info: the binary log row */
@@ -142,6 +154,7 @@ struct txn_stmt {
 	struct multilink in_old_value_list;
 	struct multilink in_new_value_list;
 };
+
 
 /**
  * Transaction savepoint object. Allocated on a transaction
