@@ -164,18 +164,27 @@ luaT_gettuple(struct lua_State *L, int idx, struct tuple_format *format)
  * wrong stack slot when it will be scheduled for execution after
  * yield.
  *
- * Return a Lua state on success and set @a coro_ref. This
- * reference should be passed to `luaT_release_temp_luastate()`,
- * when the state is not needed anymore.
+ * Return a Lua state on success and set @a coro_ref and @a top.
+ * These values should be passed to
+ * `luaT_release_temp_luastate()`, when the state is not needed
+ * anymore.
  *
  * Return NULL and set a diag at failure.
  */
 static struct lua_State *
-luaT_temp_luastate(int *coro_ref)
+luaT_temp_luastate(int *coro_ref, int *top)
 {
 	if (fiber()->storage.lua.stack != NULL) {
+		/*
+		 * Reuse existing stack. In the releasing function
+		 * we should drop a stack top to its initial
+		 * value to don't exhaust available slots by
+		 * many requests in row.
+		 */
+		struct lua_State *L = fiber()->storage.lua.stack;
 		*coro_ref = LUA_REFNIL;
-		return fiber()->storage.lua.stack;
+		*top = lua_gettop(L);
+		return L;
 	}
 
 	/*
@@ -197,6 +206,7 @@ luaT_temp_luastate(int *coro_ref)
 	 * registry while it is in use.
 	 */
 	*coro_ref = luaL_ref(tarantool_L, LUA_REGISTRYINDEX);
+	*top = -1;
 	return L;
 }
 
@@ -206,14 +216,10 @@ luaT_temp_luastate(int *coro_ref)
  * It is the other half of `luaT_temp_luastate()`.
  */
 static void
-luaT_release_temp_luastate(int coro_ref)
+luaT_release_temp_luastate(struct lua_State *L, int coro_ref, int top)
 {
-	/*
-	 * FIXME: The reusable fiber-local Lua state is not
-	 * unreferenced here (coro_ref == LUA_REFNIL), but
-	 * it must be truncated to its past top to prevent
-	 * stack overflow.
-	 */
+	if (top >= 0)
+		lua_settop(L, top);
 	luaL_unref(tarantool_L, LUA_REGISTRYINDEX, coro_ref);
 }
 
@@ -521,11 +527,12 @@ static int
 luaL_merge_source_buffer_fetch(struct merge_source_buffer *source)
 {
 	int coro_ref = LUA_REFNIL;
-	struct lua_State *L = luaT_temp_luastate(&coro_ref);
+	int top = -1;
+	struct lua_State *L = luaT_temp_luastate(&coro_ref, &top);
 	if (L == NULL)
 		return -1;
 	int rc = luaL_merge_source_buffer_fetch_impl(source, L);
-	luaT_release_temp_luastate(coro_ref);
+	luaT_release_temp_luastate(L, coro_ref, top);
 	return rc;
 }
 
@@ -799,11 +806,12 @@ luaL_merge_source_table_next(struct merge_source *base,
 			     struct tuple **out)
 {
 	int coro_ref = LUA_REFNIL;
-	struct lua_State *L = luaT_temp_luastate(&coro_ref);
+	int top = -1;
+	struct lua_State *L = luaT_temp_luastate(&coro_ref, &top);
 	if (L == NULL)
 		return -1;
 	int rc = luaL_merge_source_table_next_impl(base, format, out, L);
-	luaT_release_temp_luastate(coro_ref);
+	luaT_release_temp_luastate(L, coro_ref, top);
 	return rc;
 }
 
@@ -898,7 +906,7 @@ luaL_merge_source_tuple_fetch(struct merge_source_tuple *source,
 
 	/* Handle incorrect results count. */
 	if (nresult != 2) {
-		diag_set(IllegalParams, "Expected <state>, <tuple> got %d "
+		diag_set(IllegalParams, "Expected <state>, <tuple>, got %d "
 			 "return values", nresult);
 		return -1;
 	}
@@ -973,11 +981,12 @@ luaL_merge_source_tuple_next(struct merge_source *base,
 			     struct tuple **out)
 {
 	int coro_ref = LUA_REFNIL;
-	struct lua_State *L = luaT_temp_luastate(&coro_ref);
+	int top = -1;
+	struct lua_State *L = luaT_temp_luastate(&coro_ref, &top);
 	if (L == NULL)
 		return -1;
 	int rc = luaL_merge_source_tuple_next_impl(base, format, out, L);
-	luaT_release_temp_luastate(coro_ref);
+	luaT_release_temp_luastate(L, coro_ref, top);
 	return rc;
 }
 
