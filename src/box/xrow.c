@@ -879,6 +879,84 @@ xrow_encode_dml(const struct request *request, struct region *region,
 }
 
 int
+xrow_encode_confirm(struct xrow_header *row, uint32_t replica_id, int64_t lsn)
+{
+	size_t len = mp_sizeof_map(2) + mp_sizeof_uint(IPROTO_REPLICA_ID) +
+		     mp_sizeof_uint(replica_id) + mp_sizeof_uint(IPROTO_LSN) +
+		     mp_sizeof_uint(lsn);
+	char *buf = (char *)region_alloc(&fiber()->gc, len);
+	if (buf == NULL) {
+		diag_set(OutOfMemory, len, "region_alloc", "buf");
+		return -1;
+	}
+	char *pos = buf;
+
+	pos = mp_encode_map(pos, 2);
+	pos = mp_encode_uint(pos, IPROTO_REPLICA_ID);
+	pos = mp_encode_uint(pos, replica_id);
+	pos = mp_encode_uint(pos, IPROTO_LSN);
+	pos = mp_encode_uint(pos, lsn);
+
+	memset(row, 0, sizeof(*row));
+
+	row->body[0].iov_base = buf;
+	row->body[0].iov_len = len;
+	row->bodycnt = 1;
+
+	row->type = IPROTO_CONFIRM;
+
+	return 0;
+}
+
+int
+xrow_decode_confirm(struct xrow_header *row, uint32_t *replica_id, int64_t *lsn)
+{
+	if (row->bodycnt == 0) {
+		diag_set(ClientError, ER_INVALID_MSGPACK, "request body");
+		return -1;
+	}
+
+	assert(row->bodycnt == 1);
+
+	const char * const data = (const char *)row->body[0].iov_base;
+	const char * const end = data + row->body[0].iov_len;
+	const char *d = data;
+	if (mp_check(&d, end) != 0 || mp_typeof(*data) != MP_MAP) {
+		xrow_on_decode_err(data, end, ER_INVALID_MSGPACK,
+				   "request body");
+		return -1;
+	}
+
+	d = data;
+	uint32_t map_size = mp_decode_map(&d);
+	for (uint32_t i = 0; i < map_size; i++) {
+		enum mp_type type = mp_typeof(*d);
+		if (type != MP_UINT) {
+			mp_next(&d);
+			mp_next(&d);
+			continue;
+		}
+		uint8_t key = mp_decode_uint(&d);
+		if (key >= IPROTO_KEY_MAX || iproto_key_type[key] != type) {
+			xrow_on_decode_err(data, end, ER_INVALID_MSGPACK,
+					   "request body");
+			return -1;
+		}
+		switch (key) {
+		case IPROTO_REPLICA_ID:
+			*replica_id = mp_decode_uint(&d);
+			break;
+		case IPROTO_LSN:
+			*lsn = mp_decode_uint(&d);
+			break;
+		default:
+			mp_next(&d);
+		}
+	}
+	return 0;
+}
+
+int
 xrow_to_iovec(const struct xrow_header *row, struct iovec *out)
 {
 	assert(mp_sizeof_uint(UINT32_MAX) == 5);

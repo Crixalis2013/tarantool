@@ -219,6 +219,9 @@ enum iproto_type {
 	/** The maximum typecode used for box.stat() */
 	IPROTO_TYPE_STAT_MAX,
 
+	/** A confirmation message for synchronous transactions. */
+	IPROTO_CONFIRM = 40,
+
 	/** PING request */
 	IPROTO_PING = 64,
 	/** Replication JOIN command */

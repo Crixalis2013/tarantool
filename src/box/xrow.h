@@ -208,6 +208,29 @@ xrow_encode_dml(const struct request *request, struct region *region,
 		struct iovec *iov);
 
 /**
+ * Encode the CONFIRM to row body and set row type to
+ * IPROTO_CONFIRM.
+ * @param row xrow header.
+ * @param replica_id master's instance id.
+ * @param lsn last confirmed lsn.
+ * @retval -1 on error.
+ * @retval > 0 xrow bodycnt.
+ */
+int
+xrow_encode_confirm(struct xrow_header *row, uint32_t replica_id, int64_t lsn);
+
+/**
+ * Decode the CONFIRM request body.
+ * @param row xrow header.
+ * @param[out] replica_id master's instance id.
+ * @param[out] lsn last confirmed lsn.
+ * @retwal -1 on error.
+ * @retwal 0 success.
+ */
+int
+xrow_decode_confirm(struct xrow_header *row, uint32_t *replica_id, int64_t *lsn);
+
+/**
  * CALL/EVAL request.
  */
 struct call_request {
