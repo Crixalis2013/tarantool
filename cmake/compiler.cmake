@@ -33,10 +33,6 @@ if (CMAKE_COMPILER_IS_GNUCC)
            Your GCC version is ${CMAKE_CXX_COMPILER_VERSION}, please update
                    ")
        endif()
-else()
-     if (BUILD_STATIC)
-           message(FATAL_ERROR "Static build is supported for GCC only")
-     endif()
 endif()
 
 #
@@ -120,8 +116,19 @@ set (CMAKE_CXX_FLAGS_RELWITHDEBINFO
 
 unset(CC_DEBUG_OPT)
 
+message(STATUS "Looking for libunwind.h")
+find_path(UNWIND_INCLUDE_DIR libunwind.h)
+message(STATUS "Looking for libunwind.h - ${UNWIND_INCLUDE_DIR}")
+
+if (UNWIND_INCLUDE_DIR)
+    include_directories(${UNWIND_INCLUDE_DIR})
+endif()
+
+set(CMAKE_REQUIRED_INCLUDES ${UNWIND_INCLUDE_DIR})
 check_include_file(libunwind.h HAVE_LIBUNWIND_H)
-if(BUILD_STATIC)
+set(CMAKE_REQUIRED_INCLUDES "")
+
+if(BUILD_STATIC AND NOT TARGET_OS_DARWIN)
     set(UNWIND_LIB_NAME libunwind.a)
 else()
     set(UNWIND_LIB_NAME unwind)
@@ -185,7 +192,7 @@ if (ENABLE_BACKTRACE)
     find_package_message(UNWIND_LIBRARIES "Found unwind" "${UNWIND_LIBRARIES}")
 endif()
 
-if(BUILD_STATIC)
+if(BUILD_STATIC AND NOT TARGET_OS_DARWIN)
     # Static linking for c++ routines
     add_compile_flags("C;CXX" "-static-libstdc++")
 endif()

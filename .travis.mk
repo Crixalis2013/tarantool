@@ -144,8 +144,12 @@ deps_debian_static:
 test_static_build: deps_debian_static
 	CMAKE_EXTRA_PARAMS=-DBUILD_STATIC=ON make -f .travis.mk test_debian_no_deps
 
-test_static_docker_build:
-	docker build --no-cache --network=host --build-arg RUN_TESTS=ON -f Dockerfile.staticbuild .
+# New static build
+
+test_static_build_no_deps_linux:
+	cd static-build && cmake . && make -j && ctest -V
+	cd test && /usr/bin/python test-run.py --force \
+		--builddir ${PWD}/static-build/tarantool-prefix/src/tarantool-build $(TEST_RUN_EXTRA_PARAMS)
 
 #######
 # OSX #
@@ -172,15 +176,16 @@ build_osx:
 	cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_WERROR=ON ${CMAKE_EXTRA_PARAMS}
 	make -j
 
-test_osx_no_deps: build_osx
-	# Limits: Increase the maximum number of open file descriptors on macOS:
-	#   Travis-ci needs the "ulimit -n <value>" call
-	#   Gitlab-ci needs the "launchctl limit maxfiles <value>" call
-	# Also gitlib-ci needs the password to change the limits, while
-	# travis-ci runs under root user. Limit setup must be in the same
-	# call as tests runs call.
-	# Tests: Temporary excluded replication/ suite with some tests
-	#        from other suites by issues #4357 and #4370
+
+# Limits: Increase the maximum number of open file descriptors on macOS:
+#   Travis-ci needs the "ulimit -n <value>" call
+#   Gitlab-ci needs the "launchctl limit maxfiles <value>" call
+# Also gitlib-ci needs the password to change the limits, while
+# travis-ci runs under root user. Limit setup must be in the same
+# call as tests runs call.
+# Tests: Temporary excluded replication/ suite with some tests
+#        from other suites by issues #4357 and #4370
+INIT_TEST_ENV_OSX=\
 	sudo -S launchctl limit maxfiles ${MAX_FILES} || : ; \
 		launchctl limit maxfiles || : ; \
 		ulimit -n ${MAX_FILES} || : ; \
@@ -189,10 +194,32 @@ test_osx_no_deps: build_osx
 		launchctl limit maxproc || : ; \
 		ulimit -u ${MAX_PROC} || : ; \
 		ulimit -u ; \
-		rm -rf /tmp/tnt ; \
-		cd test && ./test-run.py --vardir /tmp/tnt --force $(TEST_RUN_EXTRA_PARAMS)
+		rm -rf /tmp/tnt
+
+test_osx_no_deps: build_osx
+	# Init macOS test env
+	${INIT_TEST_ENV_OSX}; \
+	cd test && ./test-run.py --vardir /tmp/tnt --force $(TEST_RUN_EXTRA_PARAMS)
 
 test_osx: deps_osx test_osx_no_deps
+
+# Static macOS build
+
+STATIC_OSX_PKGS=autoconf automake libtool cmake file://$${PWD}/tools/brew_taps/tntpython2.rb
+base_deps_osx:
+	brew update || echo | /usr/bin/ruby -e \
+		"$$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+	brew install --force ${STATIC_OSX_PKGS} || brew upgrade ${STATIC_OSX_PKGS}
+	pip install --force-reinstall -r test-run/requirements.txt
+
+test_static_build_no_deps_osx: base_deps_osx
+	cd static-build && cmake . && make -j && ctest -V
+	# Init macOS test env
+	${INIT_TEST_ENV_OSX}; \
+	cd test && ./test-run.py --vardir /tmp/tnt \
+		--builddir ${PWD}/static-build/tarantool-prefix/src/tarantool-build \
+		--force $(TEST_RUN_EXTRA_PARAMS)
+
 
 ###########
 # FreeBSD #

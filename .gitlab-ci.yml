@@ -502,10 +502,15 @@ static_build:
   script:
     - ${GITLAB_MAKE} test_static_build
 
-static_docker_build:
-  stage: test
-  tags:
-    - deploy_test
-  <<: *docker_cleanup_script
+static_build_no_deps_linux:
+  <<: *docker_test_definition
   script:
-    - ${GITLAB_MAKE} test_static_docker_build
+    - ${GITLAB_MAKE} test_static_build_no_deps_linux
+
+static_build_no_deps_osx_15:
+  stage: test
+  <<: *shell_cleanup_script
+  tags:
+    - osx_15
+  script:
+    - ${GITLAB_MAKE} test_static_build_no_deps_osx
