@@ -37,51 +37,11 @@
 #include "errinj.h"
 #include "small/mempool.h"
 
-
-static void
-multilink_init(struct multilink *link, size_t id)
-{
-	rlist_create(&link->link);
-	link->id = id;
-}
-
-static struct txn_stmt *
-stmt_by_multilink(struct multilink *link)
-{
-
-	if (link->id == 0)
-		return rlist_entry(link, struct txn_stmt, in_old_value_list);
-	else
-		return rlist_entry(link, struct txn_stmt, in_new_value_list);
-}
-
 struct tx_value
 {
 	struct tuple *tuple;
-	/*
-	 * We keep a history of a value in several lists of tx statements,
-	 * actually of tx_value_history_entry.
-	 * New statements are added to the end of list.
-	 */
-	/**
-	 * List of committed tx statements that have changed the value.
-	 * These changes must be seen by all txs except those which have
-	 * read-only read views.
-	 * Does not participate in conflict resolution.
-	 */
-	struct rlist commited;
-	/**
-	 * List of prepared tx statements that have changed the value.
-	 * A prepared tx may be rolled back and thus must not be seen by other
-	 * txs, but one can expect that those statements will be committed
-	 * very soon.
-	 */
-	struct rlist prepared;
-	/**
-	 * List of tx statements of txs that are in progress now.
-	 * Nobody knows when or whether they'll be committed.
-	 */
-	struct rlist inprogress;
+	struct txn_stmt *add_stmt;
+	struct txn_stmt *del_stmt;
 };
 
 static uint32_t
@@ -94,7 +54,7 @@ tx_value_key_hash(const struct tuple *a)
 #define mh_name _value
 #define mh_key_t struct tuple *
 #define mh_node_t struct tx_value
-#define mh_arg_t void *
+#define mh_arg_t int
 #define mh_hash(a, arg) (tx_value_key_hash((a)->tuple))
 #define mh_hash_key(a, arg) (tx_value_key_hash(a))
 #define mh_cmp(a, b, arg) ((a)->tuple != (b)->tuple)
@@ -105,7 +65,7 @@ tx_value_key_hash(const struct tuple *a)
 struct tx_manager
 {
 	struct mempool tx_value_pool;
-	struct mh_value_t* values;
+	struct mh_value_t *values;
 };
 
 static struct tx_manager tx_manager_core;
@@ -170,13 +130,17 @@ txn_add_redo(struct txn *txn, struct txn_stmt *stmt, struct request *request)
 
 /** Initialize a new stmt object within txn. */
 static struct txn_stmt *
-txn_stmt_new(struct region *region)
+txn_stmt_new(struct region *region, struct space *space)
 {
-	int size;
 	struct txn_stmt *stmt;
-	stmt = region_alloc_object(region, struct txn_stmt, &size);
+	size_t stmt_size = sizeof(struct txn_stmt);
+	if (space != NULL)
+		stmt_size += space->index_count * sizeof(struct tuple *);
+	stmt = (struct txn_stmt *)
+		region_aligned_alloc(region, stmt_size,
+				     alignof(struct txn_stmt));
 	if (stmt == NULL) {
-		diag_set(OutOfMemory, size, "region_alloc_object", "stmt");
+		diag_set(OutOfMemory, stmt_size, "region_alloc_object", "stmt");
 		return NULL;
 	}
 
@@ -188,8 +152,9 @@ txn_stmt_new(struct region *region)
 	stmt->engine_savepoint = NULL;
 	stmt->row = NULL;
 	stmt->has_triggers = false;
-	multilink_init(&stmt->in_old_value_list, 0);
-	multilink_init(&stmt->in_new_value_list, 1);
+	stmt->track_count = space == NULL ? 0 : space->index_count;
+	memset(&stmt->index_replaced, 0, sizeof(stmt->index_replaced));
+	memset(stmt->track, 0, stmt->track_count * sizeof(stmt->track[0]));
 	return stmt;
 }
 
@@ -200,6 +165,9 @@ txn_stmt_unref_tuples(struct txn_stmt *stmt)
 		tuple_unref(stmt->old_tuple);
 	if (stmt->new_tuple != NULL)
 		tuple_unref(stmt->new_tuple);
+	for (size_t i = 0; i < stmt->track_count; i++)
+		if (stmt->track[i] != NULL)
+			tuple_unref(stmt->track[i]);
 }
 
 /*
@@ -371,7 +339,7 @@ txn_begin_stmt(struct txn *txn, struct space *space)
 		diag_set(ClientError, ER_SUB_STMT_MAX);
 		return -1;
 	}
-	struct txn_stmt *stmt = txn_stmt_new(&txn->region);
+	struct txn_stmt *stmt = txn_stmt_new(&txn->region, space);
 	if (stmt == NULL)
 		return -1;
 
@@ -1108,17 +1076,121 @@ tx_cause_conflict(struct txn *wreaker, struct txn *victim)
 	return 0;
 }
 
-struct tuple *
-tx_manager_tuple_fix_slow(struct tuple *t, uint32_t index, uint32_t mk_index)
+static bool
+tx_can_see(const struct txn_stmt *stmt, bool prepared_ok)
 {
-	mh_int_t pos = mh_value_find(tx_manager_core.values, t, NULL);
-	assert(pos != mh_end(tx_manager_core.values));
-	struct tx_value *history = mh_value_node(tx_manager_core.values, pos);
-	struct multilink *multilink;
-	rlist_foreach_entry_reverse(multilink, &history->inprogress, link)
-	{
-		struct txn_stmt *stmt = stmt_by_multilink(multilink);
-		if (stmt->
-		(void)mk_index;
+	return (stmt->txn_owner->status == TXN_PREPARED && prepared_ok) ||
+	       (stmt->txn_owner->status == TXN_COMMITTED);
+}
+
+struct tuple *
+tx_manager_tuple_fix_slow(struct tuple *tuple, uint32_t index,
+			  uint32_t mk_index, bool prepared_ok)
+{
+	struct txn *txn = in_txn();
+	struct tuple *tuple_save = tuple;
+	struct tuple *result = NULL;
+	bool own_change = false;
+	while (true) {
+		struct mh_value_t *ht = tx_manager_core.values;
+		mh_int_t pos = mh_value_find(ht, tuple, 0);
+		assert(pos != mh_end(ht));
+		struct tx_value *value = mh_value_node(ht, pos);
+		assert(value->add_stmt != NULL ||
+		       value->del_stmt != NULL);
+
+		if (value->del_stmt != NULL) {
+			struct txn_stmt *stmt = value->del_stmt;
+			assert(tuple == stmt->old_tuple);
+
+			if (stmt->txn_owner == txn) {
+				own_change = true;
+				break;
+			} else if (tx_can_see(stmt, prepared_ok)) {
+				result = tuple;
+				break;
+			}
+		}
+
+		if (value->add_stmt != NULL) {
+			struct txn_stmt *stmt = value->add_stmt;
+			assert(tuple == stmt->new_tuple);
+			if (stmt->txn_owner == in_txn()) {
+				own_change = true;
+				result = tuple;
+			} else if (tx_can_see(stmt, prepared_ok)) {
+				result = tuple;
+				break;
+			}
+
+			tuple = value->add_stmt->track[index];
+		}
+	}
+	(void)own_change;
+	(void)tuple_save;
+	(void)mk_index; /* TODO: multiindex */
+	return result;
+}
+
+int
+tx_track_slow(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
+{
+	struct mh_value_t *ht = tx_manager_core.values;
+	struct tx_value *value;
+	if (tuple->flags & TUPLE_IS_DIRTY) {
+		mh_int_t pos = mh_value_find(ht, tuple, 0);
+		assert(pos != mh_end(ht));
+		value = mh_value_node(ht, pos);
+		assert(value->tuple == tuple);
+	} else {
+		struct mempool *pool = &tx_manager_core.tx_value_pool;
+		value = (struct tx_value *)mempool_alloc(pool);
+		if (value == NULL) {
+			diag_set(OutOfMemory, sizeof(struct tx_value),
+				 "tx_manager", "tx track value");
+			return -1;
+		}
+		value->tuple = tuple;
+		value->add_stmt = NULL;
+		value->del_stmt = NULL;
+		struct tx_value *empty;
+		mh_int_t pos = mh_value_put(ht, value, &empty, 0);
+		if (pos == mh_end(ht)) {
+			mempool_free(pool, value);
+			diag_set(OutOfMemory, pos + 1,
+				 "tx_manager", "tx track hash table");
+			return -1;
+		}
+		tuple->flags |= TUPLE_IS_DIRTY;
+	}
+	if (add_or_del) {
+		assert(value->add_stmt == NULL);
+		value->add_stmt = stmt;
+	} else {
+		assert(value->del_stmt == NULL);
+		value->del_stmt = stmt;
+	}
+	return 0;
+}
+
+void
+tx_untrack_slow(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
+{
+	assert(tuple->flags & TUPLE_IS_DIRTY);
+	struct mh_value_t *ht = tx_manager_core.values;
+	mh_int_t pos = mh_value_find(ht, tuple, 0);
+	assert(pos != mh_end(ht));
+	struct tx_value *value = mh_value_node(ht, pos);
+	assert(value->tuple == tuple);
+	if (add_or_del) {
+		assert(value->add_stmt == stmt); (void)stmt;
+		value->add_stmt = NULL;
+	} else {
+		assert(value->del_stmt == stmt); (void)stmt;
+		value->del_stmt = NULL;
+	}
+	if (value->add_stmt == NULL && value->del_stmt == NULL) {
+		mh_value_del(ht, pos, 0);
+		tuple->flags &= ~TUPLE_IS_DIRTY;
 	}
 }

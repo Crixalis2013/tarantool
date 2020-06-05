@@ -77,12 +77,6 @@ enum {
 	TXN_SUB_STMT_MAX = 3
 };
 
-struct multilink
-{
-	size_t id;
-	struct rlist link;
-};
-
 struct tx_value;
 
 /**
@@ -137,8 +131,6 @@ struct txn_stmt {
 	 * space:replace{1, 2, 3} -- both indexes replaced their keys (bit 1).
 	 */
 	uint64_t index_replaced[2];
-	static_assert(sizeof(index_replaced) * CHAR_BIT == BOX_INDEX_MAX,
-		      "Wrong index bitfield size");
 	/** Engine savepoint for the start of this statement. */
 	void *engine_savepoint;
 	/** Redo info: the binary log row */
@@ -148,13 +140,13 @@ struct txn_stmt {
 	/** Commit/rollback triggers associated with this statement. */
 	struct rlist on_commit;
 	struct rlist on_rollback;
-	/** A list of tx_value_history_entry */
-	struct tx_value *old_value_list;
-	struct tx_value *new_value_list;
-	struct multilink in_old_value_list;
-	struct multilink in_new_value_list;
+	size_t track_count;
+	struct tuple *track[];
 };
 
+static_assert(sizeof(((struct txn_stmt*)0)->index_replaced) * CHAR_BIT
+	      == BOX_INDEX_MAX,
+	      "Wrong index bitfield size");
 
 /**
  * Transaction savepoint object. Allocated on a transaction
@@ -661,7 +653,8 @@ tx_manager_free();
  * Helper of @sa tx_manager_tuple_fix
  */
 struct tuple *
-tx_manager_tuple_fix_slow(struct tuple *t, uint32_t index, uint32_t mk_index);
+tx_manager_tuple_fix_slow(struct tuple *tuple, uint32_t index,
+			  uint32_t mk_index, bool prepared_ok);
 
 /**
  * Fix a value that was read from index data structure in case it was written
@@ -673,13 +666,36 @@ tx_manager_tuple_fix_slow(struct tuple *t, uint32_t index, uint32_t mk_index);
  * @param mk_index
  * @return
  */
-
-struct tuple *
-tx_manager_tuple_fix(struct tuple *t, uint32_t index, uint32_t mk_index)
+static inline struct tuple *
+tx_manager_tuple_fix(struct tuple *tuple, uint32_t index, uint32_t mk_index,
+		     bool prepared_ok)
 {
-	if (t->flags & TUPLE_IS_DIRTY)
-		return t;
-	return tx_manager_tuple_fix_slow(t, index, mk_index);
+	if (tuple->flags & TUPLE_IS_DIRTY)
+		return tuple;
+	return tx_manager_tuple_fix_slow(tuple, index, mk_index, prepared_ok);
+}
+
+int
+tx_track_slow(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del);
+
+static inline int
+tx_track(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
+{
+	if (tuple == NULL)
+		return 0;
+	return tx_track_slow(tuple, stmt, add_or_del);
+}
+
+void
+tx_untrack_slow(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del);
+
+static inline void
+tx_untrack(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
+{
+	if (tuple == NULL)
+		return;
+	if (tuple->flags & TUPLE_IS_DIRTY)
+		tx_untrack_slow(tuple, stmt, add_or_del);
 }
 
 int
