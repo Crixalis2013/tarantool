@@ -57,6 +57,9 @@
 #include "engine.h"		/* engine_collect_garbage() */
 #include "wal.h"		/* wal_collect_garbage() */
 #include "checkpoint_schedule.h"
+#include "trigger.h"
+#include "txn.h"
+#include "txn_limbo.h"
 
 struct gc_state gc;
 
@@ -64,6 +67,26 @@ static int
 gc_cleanup_fiber_f(va_list);
 static int
 gc_checkpoint_fiber_f(va_list);
+
+//TODO: quorum timeout should be used instead
+double snap_confirm_timeout = 5.0; /* seconds */
+
+/**
+ * Waitpoint stores information about the progress of confirmation.
+ * In the case of multimaster support, it will store a bitset
+ * or array instead of the boolean.
+ */
+struct confirm_waitpoint {
+	/**
+	 * Variable for wake up the fiber that is waiting for
+	 * the end of confirmation.
+	 */
+	struct fiber_cond confirm_cond;
+	/**
+	 * Result flag.
+	 */
+	bool is_confirm;
+};
 
 /**
  * Comparator used for ordering gc_consumer objects
@@ -377,6 +400,64 @@ gc_add_checkpoint(const struct vclock *vclock)
 }
 
 static int
+gc_txn_commit_cb(struct trigger *trigger, void *event)
+{
+	(void)event;
+	struct confirm_waitpoint *cwp =
+		(struct confirm_waitpoint *)trigger->data;
+	cwp->is_confirm = true;
+	fiber_cond_signal(&cwp->confirm_cond);
+	return 0;
+}
+
+static int
+gc_txn_rollback_cb(struct trigger *trigger, void *event)
+{
+	(void)event;
+	struct confirm_waitpoint *cwp =
+		(struct confirm_waitpoint *)trigger->data;
+	fiber_cond_signal(&cwp->confirm_cond);
+	return 0;
+}
+
+/**
+ * Waiting for confirmation of all "sync" transactions
+ * during snap_confirm_timeout or fail.
+ */
+static int
+gc_wait_confirm(void)
+{
+	/* initialization of a waitpoint. */
+	struct confirm_waitpoint cwp;
+	fiber_cond_create(&cwp.confirm_cond);
+	cwp.is_confirm = false;
+
+	/* Set triggers for the last limbo transaction. */
+	struct trigger on_complete;
+	trigger_create(&on_complete, gc_txn_commit_cb, &cwp, NULL);
+	struct trigger on_rollback;
+	trigger_create(&on_rollback, gc_txn_rollback_cb, &cwp, NULL);
+	struct txn_limbo_entry *tle = txn_limbo_last_entry(&txn_limbo);
+	txn_on_commit(tle->txn, &on_complete);
+	txn_on_rollback(tle->txn, &on_rollback);
+
+	int rc = fiber_cond_wait_timeout(&cwp.confirm_cond,
+					 snap_confirm_timeout);
+	fiber_cond_destroy(&cwp.confirm_cond);
+	if (rc != 0) {
+		/* Clear the triggers if the timeout has been reached. */
+		trigger_clear(&on_complete);
+		trigger_clear(&on_rollback);
+		return -1;
+	}
+	if (!cwp.is_confirm) {
+		/* The transaction has been rollbacked. */
+		return -1;
+	}
+	return 0;
+}
+
+static int
 gc_do_checkpoint(bool is_scheduled)
 {
 	int rc;
@@ -395,6 +476,17 @@ gc_do_checkpoint(bool is_scheduled)
 	rc = wal_begin_checkpoint(&checkpoint);
 	if (rc != 0)
 		goto out;
+
+	/*
+	 * Wait the confirms on all "sync" transactions before
+	 * create a snapshot.
+	 */
+	if (!txn_limbo_is_empty(&txn_limbo)) {
+		rc = gc_wait_confirm();
+		if (rc != 0)
+			goto out;
+	}
+
 	rc = engine_commit_checkpoint(&checkpoint.vclock);
 	if (rc != 0)
 		goto out;
