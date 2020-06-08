@@ -33,9 +33,6 @@
 #include <stdio.h>
 #include <stdlib.h> /* exit() */
 
-#define header() printf("\t*** %s ***\n", __func__)
-#define footer() printf("\t*** %s: done ***\n", __func__)
-
 #define fail(expr, result) do {					\
 	fprintf(stderr, "Test failed: %s is %s at %s:%d, in function '%s'\n",\
 		expr, result, __FILE__, __LINE__, __func__);		\
@@ -128,6 +125,16 @@ int check_plan(void);
 		fprintf(stderr, "#   in %s at line %d\n", __FILE__, __LINE__); \
 	}						\
 }
+
+#define header() do {					\
+	_space(stdout);					\
+	printf("# *** %s ***\n", __func__);		\
+} while(0)
+
+#define footer() do {					\
+	_space(stdout);					\
+	printf("# *** %s: done ***\n", __func__);	\
+} while(0)
 
 #if defined(__cplusplus)
 }
