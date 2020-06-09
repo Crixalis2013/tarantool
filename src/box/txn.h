@@ -261,6 +261,8 @@ struct txn {
 	uint32_t fk_deferred_count;
 	/** List of savepoints to find savepoint by name. */
 	struct rlist savepoints;
+	struct rlist conflict_list;
+	struct rlist conflicted_by_list;
 };
 
 static inline bool
@@ -621,6 +623,9 @@ box_txn_savepoint(void);
  */
 API_EXPORT int
 box_txn_rollback_to_savepoint(box_txn_savepoint_t *savepoint);
+
+int
+tx_cause_conflict(struct txn *wreaker, struct txn *victim);
 
 #if defined(__cplusplus)
 } /* extern "C" */
