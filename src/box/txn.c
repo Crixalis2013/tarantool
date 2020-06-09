@@ -222,6 +222,7 @@ txn_begin(void)
 	txn->flags = 0;
 	txn->in_sub_stmt = 0;
 	txn->id = ++tsn;
+	txn->status = TXN_INPROGRESS;
 	txn->signature = -1;
 	txn->engine = NULL;
 	txn->engine_tx = NULL;
@@ -425,6 +426,7 @@ txn_complete(struct txn *txn)
 	 * IPROTO_NOP statements only.
 	 */
 	if (txn->signature < 0) {
+		txn->status = TXN_ABORTED;
 		/* Undo the transaction. */
 		struct txn_stmt *stmt;
 		stailq_reverse(&txn->stmts);
@@ -435,6 +437,7 @@ txn_complete(struct txn *txn)
 		if (txn_has_flag(txn, TXN_HAS_TRIGGERS))
 			txn_run_rollback_triggers(txn, &txn->on_rollback);
 	} else {
+		txn->status = TXN_COMMITTED;
 		/* Commit the transaction. */
 		if (txn->engine != NULL)
 			engine_commit(txn->engine, txn);
@@ -555,6 +558,7 @@ txn_prepare(struct txn *txn)
 		trigger_clear(&txn->fiber_on_yield);
 
 	txn->start_tm = ev_monotonic_now(loop());
+	txn->status = TXN_PREPARED;
 	return 0;
 }
 
@@ -683,6 +687,7 @@ void
 txn_rollback(struct txn *txn)
 {
 	assert(txn == in_txn());
+	txn->status = TXN_ABORTED;
 	trigger_clear(&txn->fiber_on_stop);
 	if (!txn_has_flag(txn, TXN_CAN_YIELD))
 		trigger_clear(&txn->fiber_on_yield);
