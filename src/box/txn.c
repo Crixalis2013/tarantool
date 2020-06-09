@@ -45,6 +45,13 @@ struct tx_manager
 
 static struct tx_manager txm;
 
+struct tx_conflict_tracker {
+	struct txn *wreaker;
+	struct txn *victim;
+	struct rlist in_conflict_list;
+	struct rlist in_conflicted_by_list;
+};
+
 double too_long_threshold;
 
 /* Txn cache. */
@@ -197,6 +204,8 @@ txn_new(void)
 	}
 	assert(region_used(&region) == sizeof(*txn));
 	txn->region = region;
+	rlist_create(&txn->conflict_list);
+	rlist_create(&txn->conflicted_by_list);
 	return txn;
 }
 
@@ -206,6 +215,20 @@ txn_new(void)
 inline static void
 txn_free(struct txn *txn)
 {
+	struct tx_conflict_tracker *entry, *next;
+	rlist_foreach_entry_safe(entry, &txn->conflict_list,
+				 in_conflict_list, next) {
+		rlist_del(&entry->in_conflict_list);
+		rlist_del(&entry->in_conflicted_by_list);
+	}
+	rlist_foreach_entry_safe(entry, &txn->conflicted_by_list,
+				 in_conflicted_by_list, next) {
+		rlist_del(&entry->in_conflict_list);
+		rlist_del(&entry->in_conflicted_by_list);
+	}
+	assert(rlist_empty(&txn->conflict_list));
+	assert(rlist_empty(&txn->conflicted_by_list));
+
 	struct txn_stmt *stmt;
 	stailq_foreach_entry(stmt, &txn->stmts, next)
 		txn_stmt_destroy(stmt);
@@ -223,6 +246,8 @@ txn_begin(void)
 	struct txn *txn = txn_new();
 	if (txn == NULL)
 		return NULL;
+	assert(rlist_empty(&txn->conflict_list));
+	assert(rlist_empty(&txn->conflicted_by_list));
 
 	/* Initialize members explicitly to save time on memset() */
 	stailq_create(&txn->stmts);
@@ -280,6 +305,15 @@ txn_begin_stmt(struct txn *txn, struct space *space)
 		diag_set(ClientError, ER_SUB_STMT_MAX);
 		return -1;
 	}
+
+	/*
+	 * A conflict have happened; there is no reason to continue the TX.
+	 */
+	if (txn->status == TXN_CONFLICTED) {
+		diag_set(ClientError, ER_TRANSACTION_CONFLICT);
+		return -1;
+	}
+
 	struct txn_stmt *stmt = txn_stmt_new(&txn->region);
 	if (stmt == NULL)
 		return -1;
@@ -583,6 +617,16 @@ txn_prepare(struct txn *txn)
 		diag_set(ClientError, ER_FOREIGN_KEY_CONSTRAINT);
 		return -1;
 	}
+
+	/*
+	 * Somebody else has written some value that we have read.
+	 * The transaction is not possible.
+	 */
+	if (txn->status == TXN_CONFLICTED) {
+		diag_set(ClientError, ER_TRANSACTION_CONFLICT);
+		return -1;
+	}
+
 	/*
 	 * Perform transaction conflict resolution. Engine == NULL when
 	 * we have a bunch of IPROTO_NOP statements.
@@ -591,6 +635,17 @@ txn_prepare(struct txn *txn)
 		if (engine_prepare(txn->engine, txn) != 0)
 			return -1;
 	}
+
+	struct tx_conflict_tracker *entry, *next;
+	rlist_foreach_entry_safe(entry, &txn->conflict_list,
+				 in_conflict_list, next) {
+		if (entry->victim->status == TXN_INPROGRESS)
+			entry->victim->status = TXN_CONFLICTED;
+		rlist_del(&entry->in_conflict_list);
+		rlist_del(&entry->in_conflicted_by_list);
+	}
+
+
 	trigger_clear(&txn->fiber_on_stop);
 	if (!txn_has_flag(txn, TXN_CAN_YIELD))
 		trigger_clear(&txn->fiber_on_yield);
@@ -997,4 +1052,47 @@ tx_manager_init()
 void
 tx_manager_free()
 {
+}
+
+int
+txm_cause_conflict(struct txn *wreaker, struct txn *victim)
+{
+	struct tx_conflict_tracker *tracker = NULL;
+	struct rlist *r1 = wreaker->conflict_list.next;
+	struct rlist *r2 = wreaker->conflicted_by_list.next;
+	while (r1 != &wreaker->conflict_list &&
+	       r2 != &wreaker->conflicted_by_list) {
+		tracker = rlist_entry(r1, struct tx_conflict_tracker,
+				      in_conflict_list);
+		if (tracker->wreaker == wreaker && tracker->victim == victim)
+			break;
+		tracker = rlist_entry(r2, struct tx_conflict_tracker,
+				      in_conflicted_by_list);
+		if (tracker->wreaker == wreaker && tracker->victim == victim)
+			break;
+		tracker = NULL;
+		r1 = r1->next;
+		r2 = r2->next;
+	}
+	if (tracker != NULL) {
+		/* Move to the beginning of a list
+		 * for a case of subsequent lookups */
+		rlist_del(&tracker->in_conflict_list);
+		rlist_del(&tracker->in_conflicted_by_list);
+	} else {
+		size_t size;
+		tracker = region_alloc_object(&victim->region,
+					      struct tx_conflict_tracker,
+					      &size);
+		if (tracker == NULL) {
+			diag_set(OutOfMemory, size, "tx region",
+				 "conflict_tracker");
+			return -1;
+		}
+	}
+	tracker->wreaker = wreaker;
+	tracker->victim = victim;
+	rlist_add(&wreaker->conflict_list, &tracker->in_conflict_list);
+	rlist_add(&wreaker->conflicted_by_list, &tracker->in_conflicted_by_list);
+	return 0;
 }
