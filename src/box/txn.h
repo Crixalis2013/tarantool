@@ -77,6 +77,38 @@ enum {
 };
 
 /**
+ * Status of a transaction.
+ */
+enum txn_status {
+	/**
+	 * Initial state of TX. The only state of a TX that allowed to do
+	 * read or write actions.
+	 */
+	TXN_INPROGRESS,
+	/**
+	 * The TX have passed conflict checks and is ready to be committed.
+	 */
+	TXN_PREPARED,
+	/**
+	 * The TX was aborted by other TX due to conflict.
+	 */
+	TXN_CONFLICTED,
+	/**
+	 * The TX was read_only, has a conflict and was sent to read view.
+	 * Read-only and does not participate in conflict resolution ever more.
+	 */
+	TXN_IN_READ_VIEW,
+	/**
+	 * The TX was committed.
+	 */
+	TXN_COMMITTED,
+	/**
+	 * The TX was aborted.
+	 */
+	TXN_ABORTED,
+};
+
+/**
  * A single statement of a multi-statement
  * transaction: undo and redo info.
  */
@@ -173,6 +205,8 @@ struct txn {
 	 * Valid IDs start from 1.
 	 */
 	int64_t id;
+	/** Status of the TX */
+	enum txn_status status;
 	/** List of statements in a transaction. */
 	struct stailq stmts;
 	/** Number of new rows without an assigned LSN. */
