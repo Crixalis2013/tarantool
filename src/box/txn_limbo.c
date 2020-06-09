@@ -132,10 +132,62 @@ txn_limbo_wait_complete(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 		fiber_yield();
 	fiber_set_cancellable(cancellable);
 	// TODO: implement rollback.
-	// TODO: implement confirm.
 	assert(!entry->is_rollback);
+	assert(entry->is_commit);
 	txn_limbo_remove(limbo, entry);
 	txn_clear_flag(txn, TXN_WAIT_ACK);
+}
+
+/**
+ * Write a confirmation entry to WAL. After it's written all the
+ * transactions waiting for confirmation may be finished.
+ */
+static int
+txn_limbo_write_confirm(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
+{
+	struct xrow_header row;
+	struct request request = {
+		.header = &row,
+	};
+
+	if (xrow_encode_confirm(&row, limbo->instance_id, entry->lsn) < 0)
+		return -1;
+
+	struct txn *txn = txn_begin();
+	if (txn == NULL)
+		return -1;
+
+	if (txn_begin_stmt(txn, NULL) != 0)
+		goto rollback;
+	if (txn_commit_stmt(txn, &request) != 0)
+		goto rollback;
+
+	return txn_commit(txn);
+rollback:
+	txn_rollback(txn);
+	return -1;
+}
+
+void
+txn_limbo_read_confirm(struct txn_limbo *limbo, int64_t lsn)
+{
+	assert(limbo->instance_id != REPLICA_ID_NIL &&
+	       limbo->instance_id != instance_id);
+	struct txn_limbo_entry *e, *tmp;
+	rlist_foreach_entry_safe(e, &limbo->queue, in_queue, tmp) {
+		if (e->lsn > lsn)
+			break;
+		assert(e->txn->fiber == NULL);
+		e->is_commit = true;
+		txn_limbo_remove(limbo, e);
+		txn_clear_flag(e->txn, TXN_WAIT_ACK);
+		/*
+		 * txn_complete_async must've been called already,
+		 * since CONFIRM always follows the tx in question.
+		 * So, finish this tx processing right away.
+		 */
+		txn_complete(e->txn);
+	}
 }
 
 void
@@ -147,23 +199,33 @@ txn_limbo_ack(struct txn_limbo *limbo, uint32_t replica_id, int64_t lsn)
 	int64_t prev_lsn = vclock_get(&limbo->vclock, replica_id);
 	vclock_follow(&limbo->vclock, replica_id, lsn);
 	struct txn_limbo_entry *e, *tmp;
-	rlist_foreach_entry_safe(e, &limbo->queue, in_queue, tmp) {
+	struct txn_limbo_entry *last_quorum = NULL;
+	rlist_foreach_entry(e, &limbo->queue, in_queue) {
 		if (e->lsn <= prev_lsn)
 			continue;
 		if (e->lsn > lsn)
 			break;
 		if (++e->ack_count >= replication_synchro_quorum) {
-			// TODO: better call complete() right
-			// here. Appliers use async transactions,
-			// and their txns don't have fibers to
-			// wake up. That becomes actual, when
-			// appliers will be supposed to wait for
-			// 'confirm' message.
 			e->is_commit = true;
-			rlist_del_entry(e, in_queue);
-			fiber_wakeup(e->txn->fiber);
+			last_quorum = e;
 		}
 		assert(e->ack_count <= VCLOCK_MAX);
+	}
+	if (last_quorum != NULL) {
+		if (txn_limbo_write_confirm(limbo, last_quorum) != 0) {
+			// TODO: rollback.
+			return;
+		}
+		/*
+		 * Wakeup all the entries in direct order as soon
+		 * as confirmation message is written to WAL.
+		 */
+		rlist_foreach_entry_safe(e, &limbo->queue, in_queue, tmp) {
+			rlist_del_entry(e, in_queue);
+			fiber_wakeup(e->txn->fiber);
+			if (e == last_quorum)
+				break;
+		}
 	}
 }
 

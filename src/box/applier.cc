@@ -51,6 +51,7 @@
 #include "txn.h"
 #include "box.h"
 #include "scoped_guard.h"
+#include "txn_limbo.h"
 
 STRS(applier_state, applier_STATE);
 
@@ -214,6 +215,11 @@ apply_snapshot_row(struct xrow_header *row)
 	struct txn *txn = txn_begin();
 	if (txn == NULL)
 		return -1;
+	/*
+	 * Do not wait for confirmation when fetching a snapshot.
+	 * Master only sends confirmed rows during join.
+	 */
+	txn_force_async(txn);
 	if (txn_begin_stmt(txn, space) != 0)
 		goto rollback;
 	/* no access checks here - applier always works with admin privs */
@@ -249,10 +255,74 @@ process_nop(struct request *request)
 	return txn_commit_stmt(txn, request);
 }
 
+/*
+ * An on_commit trigger set on a txn containing a CONFIRM entry.
+ * Confirms some of the txs waiting in txn_limbo.
+ */
+static int
+applier_on_confirm(struct trigger *trig, void *data)
+{
+	(void) trig;
+	int64_t lsn = *(int64_t *)data;
+	txn_limbo_read_confirm(&txn_limbo, lsn);
+	return 0;
+}
+
+static int
+process_confirm(struct request *request)
+{
+	assert(request->header->type == IPROTO_CONFIRM);
+	uint32_t replica_id;
+	struct txn *txn = in_txn();
+	size_t size;
+	int64_t *lsn = region_alloc_object(&txn->region, typeof(*lsn), &size);
+	if (lsn == NULL) {
+		diag_set(OutOfMemory, size, "region_alloc_object", "lsn");
+		return -1;
+	}
+	if (xrow_decode_confirm(request->header, &replica_id, lsn) != 0)
+		return -1;
+	/*
+	 * on_commit trigger failure is not allowed, so check for
+	 * instance id early.
+	 */
+	if (replica_id != txn_limbo.instance_id) {
+		diag_set(ClientError, ER_SYNC_MASTER_MISMATCH, replica_id,
+			 txn_limbo.instance_id);
+		return -1;
+	}
+
+	/*
+	 * Set an on_commit trigger which will perform the actual
+	 * confirmation processing.
+	 */
+	struct trigger *trig = region_alloc_object(&txn->region, typeof(*trig),
+						   &size);
+	if (trig == NULL) {
+		diag_set(OutOfMemory, size, "region_alloc_object", "trig");
+		return -1;
+	}
+	trigger_create(trig, applier_on_confirm, lsn, NULL);
+
+	if (txn_begin_stmt(txn, NULL) != 0)
+		return -1;
+
+	if (txn_commit_stmt(txn, request) == 0) {
+		txn_on_commit(txn, trig);
+		return 0;
+	} else {
+		return -1;
+	}
+}
+
 static int
 apply_row(struct xrow_header *row)
 {
 	struct request request;
+	if (row->type == IPROTO_CONFIRM) {
+		request.header = row;
+		return process_confirm(&request);
+	}
 	if (xrow_decode_dml(row, &request, dml_request_key_map(row->type)) != 0)
 		return -1;
 	if (request.type == IPROTO_NOP)
@@ -270,9 +340,20 @@ apply_row(struct xrow_header *row)
 static int
 apply_final_join_row(struct xrow_header *row)
 {
+	/*
+	 * Confirms are ignored during join. All the data master
+	 * sends us is valid.
+	 */
+	if (row->type == IPROTO_CONFIRM)
+		return 0;
 	struct txn *txn = txn_begin();
 	if (txn == NULL)
 		return -1;
+	/*
+	 * Do not wait for confirmation while processing final
+	 * join rows. See apply_snapshot_row().
+	 */
+	txn_force_async(txn);
 	if (apply_row(row) != 0) {
 		txn_rollback(txn);
 		fiber_gc();

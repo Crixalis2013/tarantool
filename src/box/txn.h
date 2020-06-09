@@ -73,6 +73,13 @@ enum txn_flag {
 	 * then finishes commit and returns success to a user.
 	 */
 	TXN_WAIT_ACK,
+	/**
+	 * A transaction mustn't wait for confirmation, even if it
+	 * touches synchronous spaces. Needed for join stage on
+	 * replica, when all the data coming from the master is
+	 * already confirmed by design.
+	 */
+	TXN_FORCE_ASYNC,
 };
 
 enum {
@@ -257,6 +264,16 @@ txn_clear_flag(struct txn *txn, enum txn_flag flag)
 	txn->flags &= ~(1 << flag);
 }
 
+/**
+ * Force async mode for transaction. It won't wait for acks
+ * or confirmation.
+ */
+static inline void
+txn_force_async(struct txn *txn)
+{
+	txn_set_flag(txn, TXN_FORCE_ASYNC);
+}
+
 /* Pointer to the current transaction (if any) */
 static inline struct txn *
 in_txn(void)
@@ -277,6 +294,12 @@ fiber_set_txn(struct fiber *fiber, struct txn *txn)
  */
 struct txn *
 txn_begin(void);
+
+/**
+ * Complete transaction processing.
+ */
+void
+txn_complete(struct txn *txn);
 
 /**
  * Commit a transaction.
