@@ -36,6 +36,13 @@
 #include "xrow.h"
 #include "errinj.h"
 
+struct tx_conflict_tracker {
+	struct txn *wreaker;
+	struct txn *victim;
+	struct rlist in_conflict_list;
+	struct rlist in_conflicted_by_list;
+};
+
 double too_long_threshold;
 
 /* Txn cache. */
@@ -187,6 +194,8 @@ txn_new(void)
 	}
 	assert(region_used(&region) == sizeof(*txn));
 	txn->region = region;
+	rlist_create(&txn->conflict_list);
+	rlist_create(&txn->conflicted_by_list);
 	return txn;
 }
 
@@ -196,6 +205,20 @@ txn_new(void)
 inline static void
 txn_free(struct txn *txn)
 {
+	struct tx_conflict_tracker *entry, *next;
+	rlist_foreach_entry_safe(entry, &txn->conflict_list,
+				 in_conflict_list, next) {
+		rlist_del(&entry->in_conflict_list);
+		rlist_del(&entry->in_conflicted_by_list);
+	}
+	rlist_foreach_entry_safe(entry, &txn->conflicted_by_list,
+				 in_conflicted_by_list, next) {
+		rlist_del(&entry->in_conflict_list);
+		rlist_del(&entry->in_conflicted_by_list);
+	}
+	assert(rlist_empty(&txn->conflict_list));
+	assert(rlist_empty(&txn->conflicted_by_list));
+
 	struct txn_stmt *stmt;
 	stailq_foreach_entry(stmt, &txn->stmts, next)
 		txn_stmt_unref_tuples(stmt);
@@ -213,6 +236,8 @@ txn_begin(void)
 	struct txn *txn = txn_new();
 	if (txn == NULL)
 		return NULL;
+	assert(rlist_empty(&txn->conflict_list));
+	assert(rlist_empty(&txn->conflicted_by_list));
 
 	/* Initialize members explicitly to save time on memset() */
 	stailq_create(&txn->stmts);
@@ -948,5 +973,47 @@ txn_on_yield(struct trigger *trigger, void *event)
 	assert(!txn_has_flag(txn, TXN_CAN_YIELD));
 	txn_rollback_to_svp(txn, NULL);
 	txn_set_flag(txn, TXN_IS_ABORTED_BY_YIELD);
+	return 0;
+}
+
+int
+tx_cause_conflict(struct txn *wreaker, struct txn *victim)
+{
+	struct tx_conflict_tracker *tracker = NULL;
+	struct rlist *r1 = wreaker->conflict_list.next;
+	struct rlist *r2 = wreaker->conflicted_by_list.next;
+	while (r1 != &wreaker->conflict_list &&
+	       r2 != &wreaker->conflicted_by_list) {
+		tracker = rlist_entry(r1, struct tx_conflict_tracker,
+				      in_conflict_list);
+		if (tracker->wreaker == wreaker && tracker->victim == victim)
+			break;
+		tracker = rlist_entry(r2, struct tx_conflict_tracker,
+				      in_conflicted_by_list);
+		if (tracker->wreaker == wreaker && tracker->victim == victim)
+			break;
+		r1 = r1->next;
+		r2 = r2->next;
+	}
+	if (tracker != NULL) {
+		/* Move to the beginning of a list
+		 * for a case of subsequent lookups */
+		rlist_del(&tracker->in_conflict_list);
+		rlist_del(&tracker->in_conflicted_by_list);
+	} else {
+		size_t size;
+		tracker = region_alloc_object(&victim->region,
+					      struct tx_conflict_tracker,
+					      &size);
+		if (tracker == NULL) {
+			diag_set(OutOfMemory, size, "tx region",
+				 "conflict_tracker");
+			return -1;
+		}
+	}
+	tracker->wreaker = wreaker;
+	tracker->victim = victim;
+	rlist_add(&wreaker->conflict_list, &tracker->in_conflict_list);
+	rlist_add(&wreaker->conflicted_by_list, &tracker->in_conflicted_by_list);
 	return 0;
 }
