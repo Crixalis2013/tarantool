@@ -37,6 +37,7 @@
 #include "fiber.h"
 #include "key_list.h"
 #include "tuple.h"
+#include "txn.h"
 #include <third_party/qsort_arg.h>
 #include <small/mempool.h>
 
@@ -539,6 +540,10 @@ memtx_tree_index_get(struct index *base, const char *key,
 	key_data.part_count = part_count;
 	key_data.hint = key_hint(key, part_count, cmp_def);
 	struct memtx_tree_data *res = memtx_tree_find(&index->tree, &key_data);
+	if (res == NULL)
+		*result = NULL;
+	else
+		*result = tx_manager_tuple_fix(res->tuple, base->def->iid, 0, false);
 	*result = res != NULL ? res->tuple : NULL;
 	return 0;
 }

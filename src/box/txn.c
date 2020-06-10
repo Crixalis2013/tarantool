@@ -626,6 +626,19 @@ txn_prepare(struct txn *txn)
 	if (!txn_has_flag(txn, TXN_CAN_YIELD))
 		trigger_clear(&txn->fiber_on_yield);
 
+	if (txn->status == TXN_CONFLITED) {
+		diag_set(ClientError, ER_TRANSACTION_CONFLICT);
+		diag_log();
+		return -1;
+	}
+
+	assert(txn->status == TXN_INPROGRESS);
+	struct tx_conflict_tracker *tr;
+	rlist_foreach_entry(tr, &txn->conflict_list, in_conflict_list) {
+		if (tr->victim->status == TXN_INPROGRESS)
+			tr->victim->status = TXN_CONFLITED;
+	}
+
 	txn->start_tm = ev_monotonic_now(loop());
 	txn->status = TXN_PREPARED;
 	return 0;
@@ -1088,9 +1101,6 @@ tx_manager_tuple_fix_slow(struct tuple *tuple, uint32_t index,
 			  uint32_t mk_index, bool prepared_ok)
 {
 	struct txn *txn = in_txn();
-	struct tuple *tuple_save = tuple;
-	struct tuple *result = NULL;
-	bool own_change = false;
 	while (true) {
 		struct mh_value_t *ht = tx_manager_core.values;
 		mh_int_t pos = mh_value_find(ht, tuple, 0);
@@ -1104,32 +1114,32 @@ tx_manager_tuple_fix_slow(struct tuple *tuple, uint32_t index,
 			assert(tuple == stmt->old_tuple);
 
 			if (stmt->txn_owner == txn) {
-				own_change = true;
-				break;
+				return NULL;
 			} else if (tx_can_see(stmt, prepared_ok)) {
-				result = tuple;
-				break;
+				return tuple;
+			} else {
+				tx_cause_conflict(txn, stmt->txn_owner);
+				tx_cause_conflict(stmt->txn_owner, txn);
 			}
-		}
+		};
 
 		if (value->add_stmt != NULL) {
 			struct txn_stmt *stmt = value->add_stmt;
 			assert(tuple == stmt->new_tuple);
 			if (stmt->txn_owner == in_txn()) {
-				own_change = true;
-				result = tuple;
+				return tuple;
 			} else if (tx_can_see(stmt, prepared_ok)) {
-				result = tuple;
-				break;
+				return tuple;
+			} else{
+				tx_cause_conflict(txn, stmt->txn_owner);
+				tx_cause_conflict(stmt->txn_owner, txn);
 			}
 
 			tuple = value->add_stmt->track[index];
 		}
 	}
-	(void)own_change;
-	(void)tuple_save;
 	(void)mk_index; /* TODO: multiindex */
-	return result;
+	return NULL;
 }
 
 int
