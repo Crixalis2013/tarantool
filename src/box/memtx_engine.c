@@ -1131,8 +1131,8 @@ memtx_tuple_new(struct tuple_format *format, const char *data, const char *end)
 	 * tuple is not the first field of the memtx_tuple.
 	 */
 	uint32_t data_offset = sizeof(struct tuple) + field_map_size;
-	if (data_offset > UINT16_MAX) {
-		/** tuple->data_offset is 16 bits */
+	if (data_offset > INT16_MAX) {
+		/** tuple->data_offset is 15 bits */
 		diag_set(ClientError, ER_TUPLE_METADATA_IS_TOO_BIG,
 			 data_offset);
 		goto end;
@@ -1170,6 +1170,7 @@ memtx_tuple_new(struct tuple_format *format, const char *data, const char *end)
 	tuple->format_id = tuple_format_id(format);
 	tuple_format_ref(format);
 	tuple->data_offset = data_offset;
+	tuple->is_dirty = false;
 	char *raw = (char *) tuple + tuple->data_offset;
 	field_map_build(&builder, raw - field_map_size);
 	memcpy(raw, data, tuple_len);

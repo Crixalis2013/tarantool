@@ -160,8 +160,8 @@ vy_stmt_alloc(struct tuple_format *format, uint32_t data_offset, uint32_t bsize)
 {
 	assert(data_offset >= sizeof(struct vy_stmt) + format->field_map_size);
 
-	if (data_offset > UINT16_MAX) {
-		/** tuple->data_offset is 16 bits */
+	if (data_offset > INT16_MAX) {
+		/** tuple->data_offset is 15 bits */
 		diag_set(ClientError, ER_TUPLE_METADATA_IS_TOO_BIG,
 			 data_offset);
 		return NULL;
@@ -198,6 +198,7 @@ vy_stmt_alloc(struct tuple_format *format, uint32_t data_offset, uint32_t bsize)
 		tuple_format_ref(format);
 	tuple->bsize = bsize;
 	tuple->data_offset = data_offset;
+	tuple->is_dirty = false;
 	vy_stmt_set_lsn(tuple, 0);
 	vy_stmt_set_type(tuple, 0);
 	vy_stmt_set_flags(tuple, 0);
