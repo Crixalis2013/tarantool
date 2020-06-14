@@ -140,11 +140,10 @@ txn_add_redo(struct txn *txn, struct txn_stmt *stmt, struct request *request)
 static struct txn_stmt *
 txn_stmt_new(struct region *region, struct space *space)
 {
-	struct txn_stmt *stmt;
-	size_t stmt_size = sizeof(struct txn_stmt);
-	if (space != NULL)
-		stmt_size += space->index_count * sizeof(struct tuple *);
-	stmt = (struct txn_stmt *)
+	size_t history_size = space == NULL ? 0 :
+			      3 * space->index_count * sizeof(struct tuple *);
+	size_t stmt_size = sizeof(struct txn_stmt) + history_size;
+	struct txn_stmt *stmt = (struct txn_stmt *)
 		region_aligned_alloc(region, stmt_size,
 				     alignof(struct txn_stmt));
 	if (stmt == NULL) {
@@ -160,8 +159,8 @@ txn_stmt_new(struct region *region, struct space *space)
 	stmt->engine_savepoint = NULL;
 	stmt->row = NULL;
 	stmt->has_triggers = false;
-	stmt->track_count = space == NULL ? 0 : space->index_count;
-	memset(stmt->track, 0, stmt->track_count * sizeof(stmt->track[0]));
+	stmt->index_count = space == NULL ? 0 : space->index_count;
+	memset(stmt->history, 0, history_size);
 	return stmt;
 }
 
@@ -172,9 +171,9 @@ txn_stmt_unref_tuples(struct txn_stmt *stmt)
 		tuple_unref(stmt->old_tuple);
 	if (stmt->new_tuple != NULL)
 		tuple_unref(stmt->new_tuple);
-	for (size_t i = 0; i < stmt->track_count; i++)
-		if (stmt->track[i] != NULL)
-			tuple_unref(stmt->track[i]);
+	for (size_t i = 0; i < 3 * stmt->index_count; i++)
+		if (stmt->history[i] != NULL)
+			tuple_unref(stmt->history[i]);
 }
 
 /*
@@ -1152,7 +1151,7 @@ tx_manager_tuple_clarify_slow(struct tuple *tuple, uint32_t index,
 				break;
 			}
 
-			tuple = value->add_stmt->track[index];
+			tuple = *txn_stmt_history_pred(value->add_stmt, index);
 		}
 	}
 	if (!own_change)
@@ -1207,6 +1206,7 @@ tx_value_get(struct tuple *tuple)
 				 "tx_manager", "tx track hash table");
 			return NULL;
 		}
+		tuple_ref(tuple);
 		tuple_set_dirty(tuple);
 	}
 	return value;
@@ -1227,6 +1227,7 @@ tx_value_check(struct tx_value *value)
 
 	assert(tuple_is_dirty(value->tuple));
 	tuple_set_clean(value->tuple);
+	tuple_unref(value->tuple);
 
 	tx_value_delete(value);
 }
@@ -1284,7 +1285,7 @@ tx_track_read(struct tuple *tuple)
 }
 
 int
-tx_track_slow(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
+tx_track(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
 {
 	struct tx_value *value = tx_value_get(tuple);
 	if (value == NULL)
@@ -1302,7 +1303,7 @@ tx_track_slow(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
 }
 
 void
-tx_untrack_slow(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
+tx_untrack(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
 {
 	assert(tuple_is_dirty(tuple));
 	struct tx_value *value = tx_value_get(tuple);
@@ -1319,3 +1320,18 @@ tx_untrack_slow(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
 
 	tx_value_check(value);
 }
+
+void
+tx_track_succ_slow(struct tuple *pred, struct tuple *succ, size_t index)
+{
+	assert(tuple_is_dirty(pred));
+	assert(tuple_is_dirty(succ));
+	struct tx_value *value = tx_value_get(pred);
+	assert(value != NULL);
+	if (value->del_stmt != NULL)
+		*txn_stmt_history_del_succ(value->del_stmt, index) = succ;
+	else
+		*txn_stmt_history_succ(value->add_stmt, index) = succ;
+	tuple_ref(succ);
+}
+

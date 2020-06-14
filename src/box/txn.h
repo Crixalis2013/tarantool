@@ -130,9 +130,37 @@ struct txn_stmt {
 	/** Commit/rollback triggers associated with this statement. */
 	struct rlist on_commit;
 	struct rlist on_rollback;
-	size_t track_count;
-	struct tuple *track[];
+	/** Index count in the space at the beginning of this statement. */
+	size_t index_count;
+	struct tuple *history[];
 };
+
+static inline struct tuple **
+txn_stmt_history_pred(struct txn_stmt *stmt, size_t index) {
+	if (index >= stmt->index_count) {
+		static __thread struct tuple *null = NULL;
+		return &null;
+	}
+	return &stmt->history[index];
+}
+
+static inline struct tuple **
+txn_stmt_history_succ(struct txn_stmt *stmt, size_t index) {
+	if (index >= stmt->index_count) {
+		static __thread struct tuple *null = NULL;
+		return &null;
+	}
+	return &stmt->history[index + stmt->index_count];
+}
+
+static inline struct tuple **
+txn_stmt_history_del_succ(struct txn_stmt *stmt, size_t index) {
+	if (index >= stmt->index_count) {
+		static __thread struct tuple *null = NULL;
+		return &null;
+	}
+	return &stmt->history[index + 2 * stmt->index_count];
+}
 
 /**
  * Transaction savepoint object. Allocated on a transaction
@@ -664,25 +692,20 @@ tx_manager_tuple_clarify(struct tuple *tuple, uint32_t index, uint32_t mk_index,
 }
 
 int
-tx_track_slow(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del);
-
-static inline int
-tx_track(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
-{
-	if (tuple == NULL)
-		return 0;
-	return tx_track_slow(tuple, stmt, add_or_del);
-}
+tx_track(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del);
 
 void
-tx_untrack_slow(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del);
+tx_untrack(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del);
 
-static inline void
-tx_untrack(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
+void
+tx_track_succ_slow(struct tuple *pred, struct tuple *succ, size_t index);
+
+inline static void
+tx_track_succ(struct tuple *pred, struct tuple *succ, size_t index)
 {
-	if (tuple == NULL)
+	if (!tuple_is_dirty(pred))
 		return;
-	tx_untrack_slow(tuple, stmt, add_or_del);
+	return tx_track_succ_slow(pred, succ, index);
 }
 
 int

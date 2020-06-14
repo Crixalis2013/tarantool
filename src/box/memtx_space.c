@@ -264,16 +264,16 @@ memtx_space_replace_all_keys(struct space *space, struct tuple *old_tuple,
 	uint32_t i = 0;
 	for (; i < space->index_count; i++) {
 		struct index *index = space->index[i];
+		struct tuple **pred = txn_stmt_history_pred(stmt, i);
 		if (index_replace(index, NULL, new_tuple,
-				  DUP_REPLACE, &stmt->track[i]) != 0)
+				  DUP_REPLACE, pred) != 0)
 			goto rollback;
-		if (stmt->track[i] != NULL) {
+		if (*pred != NULL) {
 			struct tuple *fixed =
-				tx_manager_tuple_clarify(stmt->track[i], i, 0,
-							 true);
-			uint32_t errcode = replace_check_dup(old_tuple,
-							     fixed,
-							     i ? DUP_INSERT : mode);
+				tx_manager_tuple_clarify(*pred, i, 0, true);
+			uint32_t errcode =
+				replace_check_dup(old_tuple, fixed,
+						  i ? DUP_INSERT : mode);
 			if (errcode != 0) {
 				diag_set(ClientError, errcode, index->def->name,
 					 space_name(space));
@@ -283,12 +283,23 @@ memtx_space_replace_all_keys(struct space *space, struct tuple *old_tuple,
 				old_tuple = fixed;
 				assert(old_tuple || new_tuple);
 			}
-			if (stmt->track[i] != NULL)
-				tuple_ref(stmt->track[i]);
+			if (*pred != NULL)
+				tuple_ref(*pred);
 		}
 	}
-	tx_track(new_tuple, stmt, true);
-	tx_track(old_tuple, stmt, false);
+	if (new_tuple != NULL)
+		tx_track(new_tuple, stmt, true);
+	if (old_tuple != NULL)
+		tx_track(old_tuple, stmt, false);
+	if (new_tuple != NULL) {
+		for (i = 0; i < space->index_count; i++) {
+			struct tuple **pred = txn_stmt_history_pred(stmt, i);
+			if (*pred == NULL)
+				continue;
+			assert(i == 0 || tuple_is_dirty(*pred));
+			tx_track_succ(*pred, new_tuple, i);
+		}
+	}
 
 	memtx_space_update_bsize(space, old_tuple, new_tuple);
 	if (new_tuple != NULL)
@@ -300,15 +311,16 @@ rollback:
 	for (; i > 0; i--) {
 		struct tuple *unused;
 		struct index *index = space->index[i - 1];
+		struct tuple **pred = txn_stmt_history_pred(stmt, i - 1);
 		/* Rollback must not fail. */
-		if (index_replace(index, new_tuple, stmt->track[i - 1],
+		if (index_replace(index, new_tuple, *pred,
 				  DUP_INSERT, &unused) != 0) {
 			diag_log();
 			unreachable();
 			panic("failed to rollback change");
 		}
-		if (stmt->track[i - 1] != NULL)
-			tuple_unref(stmt->track[i - 1]);
+		if (*pred != NULL)
+			tuple_unref(*pred);
 	}
 	return -1;
 }
