@@ -285,6 +285,11 @@ box_tuple_upsert(box_tuple_t *tuple, const char *expr, const char *expr_end);
 
 /** \endcond public */
 
+enum global_tuple_flags
+{
+	TUPLE_FLAGS_IS_DIRTY = 1 << 7
+};
+
 /**
  * An atom of Tarantool storage. Represents MsgPack Array.
  * Tuple has the following structure:
@@ -368,6 +373,24 @@ tuple_data_range(struct tuple *tuple, uint32_t *p_size)
 {
 	*p_size = tuple->bsize;
 	return (const char *) tuple + tuple->data_offset;
+}
+
+static inline bool
+tuple_is_dirty(const struct tuple *tuple)
+{
+	return tuple->flags & TUPLE_FLAGS_IS_DIRTY;
+}
+
+static inline void
+tuple_set_dirty(struct tuple *tuple)
+{
+	tuple->flags |= TUPLE_FLAGS_IS_DIRTY;
+}
+
+static inline void
+tuple_set_clean(struct tuple *tuple)
+{
+	tuple->flags &= ~TUPLE_FLAGS_IS_DIRTY;
 }
 
 /**
