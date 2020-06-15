@@ -52,6 +52,7 @@ double replication_connect_timeout = 30.0; /* seconds */
 int replication_connect_quorum = REPLICATION_CONNECT_QUORUM_ALL;
 double replication_sync_lag = 10.0; /* seconds */
 int replication_synchro_quorum = 1;
+double replication_synchro_timeout = 5.0; /* seconds */
 double replication_sync_timeout = 300.0; /* seconds */
 bool replication_skip_conflict = false;
 bool replication_anon = false;

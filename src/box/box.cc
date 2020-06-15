@@ -490,6 +490,18 @@ box_check_replication_synchro_quorum(void)
 }
 
 static double
+box_check_replication_synchro_timeout(void)
+{
+	double timeout = cfg_getd("replication_synchro_timeout");
+	if (timeout <= 0) {
+		diag_set(ClientError, ER_CFG, "replication_synchro_timeout",
+			 "the value must be greater than zero");
+		return -1;
+	}
+	return timeout;
+}
+
+static double
 box_check_replication_sync_timeout(void)
 {
 	double timeout = cfg_getd("replication_sync_timeout");
@@ -673,6 +685,8 @@ box_check_config()
 	box_check_replication_sync_lag();
 	if (box_check_replication_synchro_quorum() < 0)
 		diag_raise();
+	if (box_check_replication_synchro_timeout() < 0)
+		diag_raise();
 	box_check_replication_sync_timeout();
 	box_check_readahead(cfg_geti("readahead"));
 	box_check_checkpoint_count(cfg_geti("checkpoint_count"));
@@ -799,6 +813,16 @@ box_set_replication_synchro_quorum(void)
 	if (value < 0)
 		return -1;
 	replication_synchro_quorum = value;
+	return 0;
+}
+
+int
+box_set_replication_synchro_timeout(void)
+{
+	double value = box_check_replication_synchro_timeout();
+	if (value < 0)
+		return -1;
+	replication_synchro_timeout = value;
 	return 0;
 }
 
@@ -2443,6 +2467,8 @@ box_cfg_xc(void)
 	box_set_replication_connect_quorum();
 	box_set_replication_sync_lag();
 	if (box_set_replication_synchro_quorum() != 0)
+		diag_raise();
+	if (box_set_replication_synchro_timeout() != 0)
 		diag_raise();
 	box_set_replication_sync_timeout();
 	box_set_replication_skip_conflict();

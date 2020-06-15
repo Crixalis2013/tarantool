@@ -132,6 +132,12 @@ extern double replication_sync_lag;
 extern int replication_synchro_quorum;
 
 /**
+ * Time in seconds which the master node is able to wait for ACKs
+ * for a synchronous transaction until it is rolled back.
+ */
+extern double replication_synchro_timeout;
+
+/**
  * Max time to wait for appliers to synchronize before entering
  * the orphan mode.
  */
