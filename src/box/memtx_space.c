@@ -289,7 +289,9 @@ memtx_space_replace_all_keys(struct space *space, struct tuple *old_tuple,
 	}
 	if (new_tuple != NULL)
 		tx_track(new_tuple, stmt, true);
-	if (old_tuple != NULL)
+	if (*txn_stmt_history_pred(stmt, 0) != NULL)
+		tx_track(*txn_stmt_history_pred(stmt, 0), stmt, false);
+	else if (old_tuple != NULL)
 		tx_track(old_tuple, stmt, false);
 	if (new_tuple != NULL) {
 		for (i = 0; i < space->index_count; i++) {

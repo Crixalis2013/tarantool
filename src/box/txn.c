@@ -90,6 +90,9 @@ double too_long_threshold;
 /* Txn cache. */
 static struct stailq txn_cache = {NULL, &txn_cache.first};
 
+static struct tx_value *
+tx_value_get(struct tuple *tuple);
+
 static int
 txn_on_stop(struct trigger *trigger, void *event);
 
@@ -165,8 +168,15 @@ txn_stmt_new(struct region *region, struct space *space)
 }
 
 static inline void
-txn_stmt_unref_tuples(struct txn_stmt *stmt)
+txn_stmt_destroy(struct txn_stmt *stmt)
 {
+	if (stmt->new_tuple != NULL)
+		tx_untrack(stmt->new_tuple, stmt, true);
+	if (*txn_stmt_history_pred(stmt, 0) != NULL)
+		tx_untrack(*txn_stmt_history_pred(stmt, 0), stmt, false);
+	else if (stmt->old_tuple != NULL)
+		tx_untrack(stmt->old_tuple, stmt, false);
+
 	if (stmt->old_tuple != NULL)
 		tuple_unref(stmt->old_tuple);
 	if (stmt->new_tuple != NULL)
@@ -193,6 +203,17 @@ txn_rollback_one_stmt(struct txn *txn, struct txn_stmt *stmt)
 {
 	if (txn->engine != NULL && stmt->space != NULL)
 		engine_rollback_statement(txn->engine, txn, stmt);
+	for (size_t i = 0; i < stmt->index_count; i++) {
+		if (*txn_stmt_history_succ(stmt, i) != NULL) {
+			struct tx_value *value =
+				tx_value_get(*txn_stmt_history_succ(stmt, i));
+			assert(value != NULL);
+			assert(value->add_stmt != NULL);
+			*txn_stmt_history_pred(value->add_stmt, i) =
+				*txn_stmt_history_pred(stmt, i);
+		}
+	}
+
 	if (stmt->has_triggers)
 		txn_run_rollback_triggers(txn, &stmt->on_rollback);
 }
@@ -216,7 +237,7 @@ txn_rollback_to_svp(struct txn *txn, struct stailq_entry *svp)
 			assert(txn->n_applier_rows > 0);
 			txn->n_applier_rows--;
 		}
-		txn_stmt_unref_tuples(stmt);
+		txn_stmt_destroy(stmt);
 		stmt->space = NULL;
 		stmt->row = NULL;
 	}
@@ -280,7 +301,7 @@ txn_free(struct txn *txn)
 
 	struct txn_stmt *stmt;
 	stailq_foreach_entry(stmt, &txn->stmts, next)
-		txn_stmt_unref_tuples(stmt);
+		txn_stmt_destroy(stmt);
 
 	/* Truncate region up to struct txn size. */
 	region_truncate(&txn->region, sizeof(struct txn));
@@ -629,6 +650,24 @@ txn_prepare(struct txn *txn)
 		diag_set(ClientError, ER_FOREIGN_KEY_CONSTRAINT);
 		return -1;
 	}
+	/*
+	 * Move changes of the transaction back to the past in order to link
+	 * them with at least prepared transactions.
+	 */
+	struct txn_stmt *stmt;
+	stailq_foreach_entry(stmt, &txn->stmts, next) {
+		for (uint32_t i = 0; i < stmt->index_count; i++) {
+			if (*txn_stmt_history_succ(stmt, i) != NULL) {
+				struct tx_value *value =
+					tx_value_get(*txn_stmt_history_succ(stmt, i));
+				assert(value != NULL);
+				assert(value->add_stmt != NULL);
+				*txn_stmt_history_pred(value->add_stmt, i) =
+					*txn_stmt_history_pred(stmt, i);
+			}
+		}
+	}
+
 	/*
 	 * Perform transaction conflict resolution. Engine == NULL when
 	 * we have a bunch of IPROTO_NOP statements.

@@ -366,12 +366,15 @@ memtx_engine_rollback_statement(struct engine *engine, struct txn *txn,
 		struct tuple *unused;
 		struct index *index = space->index[i];
 		/* Rollback must not fail. */
-		if (index_replace(index, stmt->new_tuple, stmt->old_tuple,
-				  DUP_INSERT, &unused) != 0) {
+		if (*txn_stmt_history_succ(stmt, i) == NULL &&
+			index_replace(index, stmt->new_tuple,
+				  *txn_stmt_history_pred(stmt, i),
+				  DUP_REPLACE_OR_INSERT, &unused) != 0) {
 			diag_log();
 			unreachable();
 			panic("failed to rollback change");
 		}
+		*txn_stmt_history_pred(stmt, i) = NULL;
 	}
 
 	memtx_space_update_bsize(space, stmt->new_tuple, stmt->old_tuple);
