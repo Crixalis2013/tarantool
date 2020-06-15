@@ -68,9 +68,6 @@ gc_cleanup_fiber_f(va_list);
 static int
 gc_checkpoint_fiber_f(va_list);
 
-//TODO: quorum timeout should be used instead
-double snap_confirm_timeout = 5.0; /* seconds */
-
 /**
  * Waitpoint stores information about the progress of confirmation.
  * In the case of multimaster support, it will store a bitset
@@ -422,7 +419,7 @@ gc_txn_rollback_cb(struct trigger *trigger, void *event)
 
 /**
  * Waiting for confirmation of all "sync" transactions
- * during snap_confirm_timeout or fail.
+ * during confirm timeout or fail.
  */
 static int
 gc_wait_confirm(void)
@@ -442,7 +439,7 @@ gc_wait_confirm(void)
 	txn_on_rollback(tle->txn, &on_rollback);
 
 	int rc = fiber_cond_wait_timeout(&cwp.confirm_cond,
-					 snap_confirm_timeout);
+					 txn_limbo_confirm_timeout(&txn_limbo));
 	fiber_cond_destroy(&cwp.confirm_cond);
 	if (rc != 0) {
 		/* Clear the triggers if the timeout has been reached. */

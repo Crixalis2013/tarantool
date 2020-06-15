@@ -185,6 +185,9 @@ txn_limbo_last_entry(struct txn_limbo *limbo)
 				in_queue);
 }
 
+double
+txn_limbo_confirm_timeout(struct txn_limbo *limbo);
+
 void
 txn_limbo_init();
 

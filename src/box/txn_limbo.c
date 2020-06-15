@@ -229,6 +229,13 @@ txn_limbo_ack(struct txn_limbo *limbo, uint32_t replica_id, int64_t lsn)
 	}
 }
 
+double
+txn_limbo_confirm_timeout(struct txn_limbo *limbo)
+{
+	(void)limbo;
+	return replication_synchro_timeout;
+}
+
 void
 txn_limbo_init(void)
 {
