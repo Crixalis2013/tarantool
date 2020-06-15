@@ -205,3 +205,8 @@ target_link_libraries(coll.test core unit ${ICU_LIBRARIES} misc)
 
 add_executable(tuple_bigref.test tuple_bigref.c)
 target_link_libraries(tuple_bigref.test tuple unit)
+
+add_executable(mplua.test mplua.c)
+target_link_libraries(mplua.test unit box server core
+    ${CURL_LIBRARIES} ${LIBYAML_LIBRARIES} ${READLINE_LIBRARIES}
+    ${ICU_LIBRARIES} ${LUAJIT_LIBRARIES})

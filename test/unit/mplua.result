@@ -1,0 +1,5 @@
+	*** main ***
+1..2
+ok 1 - mplua_decode: unsupported extension raise error
+ok 2 - mplua_decode: unsupported extension correct type
+	*** main: done ***
