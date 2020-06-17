@@ -5,6 +5,9 @@ net = require('net.box')
 
 test_run:cmd('create server connecter with script = "box/proxy.lua"')
 
+readahead = box.cfg.readahead
+box.cfg{readahead = 100 * 1024}
+
 --
 -- gh-946: long polling CALL blocks input
 --
@@ -61,3 +64,12 @@ collectgarbage('collect')
 fiber.sleep(0)
 
 box.session.on_disconnect(on_disconnect) == on_disconnect
+
+c:close()
+box.schema.user.revoke('guest', 'execute', 'function', 'fast_call')
+box.schema.user.revoke('guest', 'execute', 'function', 'long_call')
+box.schema.user.revoke('guest', 'execute', 'function', 'wait_signal')
+box.schema.func.drop('fast_call')
+box.schema.func.drop('long_call')
+box.schema.func.drop('wait_signal')
+box.cfg{readahead = readahead}
