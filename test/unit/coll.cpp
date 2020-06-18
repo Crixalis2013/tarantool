@@ -30,14 +30,13 @@ void
 test_sort_strings(vector<const char *> &strings, struct coll *coll)
 {
 	sort(strings.begin(), strings.end(), comp(coll));
-	cout << strings[0] << endl;
+	note("%s", strings[0]);
 	for (size_t i = 1; i < strings.size(); i++) {
 		int cmp = coll->cmp(strings[i], strlen(strings[i]),
 				    strings[i - 1], strlen(strings[i - 1]),
 				    coll);
-		cout << strings[i]
-		     << (cmp < 0 ? " LESS" : cmp > 0 ? " GREATER " : " EQUAL")
-		     << endl;
+		note("# %s %s", strings[i],
+		    (cmp < 0 ? " LESS" : cmp > 0 ? " GREATER " : " EQUAL"));
 	}
 };
 
@@ -45,6 +44,7 @@ void
 manual_test()
 {
 	header();
+	plan(7);
 
 	vector<const char *> strings;
 	struct coll_def def;
@@ -54,62 +54,63 @@ manual_test()
 	def.icu.strength = COLL_ICU_STRENGTH_IDENTICAL;
 	struct coll *coll;
 
-	cout << " -- default ru_RU -- " << endl;
+	note("-- default ru_RU --");
 	coll = coll_new(&def);
-	assert(coll != NULL);
+	fail_if(coll != NULL);
 	strings = {"Б", "бб", "е", "ЕЕЕЕ", "ё", "Ё", "и", "И", "123", "45" };
 	test_sort_strings(strings, coll);
 	coll_unref(coll);
 
-	cout << " -- --||-- + upper first -- " << endl;
+	note("-- --||-- + upper first --");
 	def.icu.case_first = COLL_ICU_CF_UPPER_FIRST;
 	coll = coll_new(&def);
-	assert(coll != NULL);
+	fail_if(coll != NULL);
 	strings = {"Б", "бб", "е", "ЕЕЕЕ", "ё", "Ё", "и", "И", "123", "45" };
 	test_sort_strings(strings, coll);
 	coll_unref(coll);
 
-	cout << " -- --||-- + lower first -- " << endl;
+	note("-- --||-- + lower first --");
 	def.icu.case_first = COLL_ICU_CF_LOWER_FIRST;
 	coll = coll_new(&def);
-	assert(coll != NULL);
+	fail_if(coll != NULL);
 	strings = {"Б", "бб", "е", "ЕЕЕЕ", "ё", "Ё", "и", "И", "123", "45" };
 	test_sort_strings(strings, coll);
 	coll_unref(coll);
 
-	cout << " -- --||-- + secondary strength + numeric -- " << endl;
+	note("-- --||-- + secondary strength + numeric --");
 	def.icu.strength = COLL_ICU_STRENGTH_SECONDARY;
 	def.icu.numeric_collation = COLL_ICU_ON;
 	coll = coll_new(&def);
-	assert(coll != NULL);
+	fail_if(coll != NULL);
 	strings = {"Б", "бб", "е", "ЕЕЕЕ", "ё", "Ё", "и", "И", "123", "45" };
 	test_sort_strings(strings, coll);
 	coll_unref(coll);
 
-	cout << " -- --||-- + case level -- " << endl;
+	note("-- --||-- + case level --");
 	def.icu.case_level = COLL_ICU_ON;
 	coll = coll_new(&def);
-	assert(coll != NULL);
+	fail_if(coll != NULL);
 	strings = {"Б", "бб", "е", "ЕЕЕЕ", "ё", "Ё", "и", "И", "123", "45" };
 	test_sort_strings(strings, coll);
 	coll_unref(coll);
 
-	cout << " -- en_EN -- " << endl;
+	note("-- en_EN --");
 	snprintf(def.locale, sizeof(def.locale), "%s", "en_EN-EN");
 	coll = coll_new(&def);
-	assert(coll != NULL);
+	fail_if(coll != NULL);
 	strings = {"aa", "bb", "cc", "ch", "dd", "gg", "hh", "ii" };
 	test_sort_strings(strings, coll);
 	coll_unref(coll);
 
-	cout << " -- cs_CZ -- " << endl;
+	note("-- cs_CZ --");
 	snprintf(def.locale, sizeof(def.locale), "%s", "cs_CZ");
 	coll = coll_new(&def);
-	assert(coll != NULL);
+	fail_if(coll != NULL);
 	strings = {"aa", "bb", "cc", "ch", "dd", "gg", "hh", "ii" };
 	test_sort_strings(strings, coll);
 	coll_unref(coll);
 
+	check_plan();
 	footer();
 }
 
@@ -127,6 +128,7 @@ void
 hash_test()
 {
 	header();
+	plan(8);
 
 	struct coll_def def;
 	memset(&def, 0, sizeof(def));
@@ -137,23 +139,24 @@ hash_test()
 
 	/* Case sensitive */
 	coll = coll_new(&def);
-	assert(coll != NULL);
-	cout << "Case sensitive" << endl;
-	cout << (calc_hash("ае", coll) != calc_hash("аё", coll) ? "OK" : "Fail") << endl;
-	cout << (calc_hash("ае", coll) != calc_hash("аЕ", coll) ? "OK" : "Fail") << endl;
-	cout << (calc_hash("аЕ", coll) != calc_hash("аё", coll) ? "OK" : "Fail") << endl;
+	fail_if(coll != NULL);
+	note("Case sensitive");
+	isnt(calc_hash("ае", coll), calc_hash("аё", coll), "ае != аё");
+	isnt(calc_hash("ае", coll), calc_hash("аЕ", coll), "ае != аЕ");
+	isnt(calc_hash("аЕ", coll), calc_hash("аё", coll), "аЕ != аё");
 	coll_unref(coll);
 
 	/* Case insensitive */
 	def.icu.strength = COLL_ICU_STRENGTH_SECONDARY;
 	coll = coll_new(&def);
-	assert(coll != NULL);
-	cout << "Case insensitive" << endl;
-	cout << (calc_hash("ае", coll) != calc_hash("аё", coll) ? "OK" : "Fail") << endl;
-	cout << (calc_hash("ае", coll) == calc_hash("аЕ", coll) ? "OK" : "Fail") << endl;
-	cout << (calc_hash("аЕ", coll) != calc_hash("аё", coll) ? "OK" : "Fail") << endl;
+	fail_if(coll != NULL);
+	note("Case insensitive");
+	isnt(calc_hash("ае", coll), calc_hash("аё", coll), "ае != аё");
+	is(calc_hash("ае", coll), calc_hash("аЕ", coll), "ае == аЕ");
+	isnt(calc_hash("аЕ", coll), calc_hash("аё", coll), "аЕ != аё");
 	coll_unref(coll);
 
+	check_plan();
 	footer();
 }
 
@@ -187,6 +190,7 @@ cache_test()
 int
 main(int, const char**)
 {
+	plan(0);
 	coll_init();
 	memory_init();
 	fiber_init(fiber_c_invoke);
@@ -196,4 +200,5 @@ main(int, const char**)
 	fiber_free();
 	memory_free();
 	coll_free();
+	check_plan();
 }
