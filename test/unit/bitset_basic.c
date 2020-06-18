@@ -92,7 +92,7 @@ void test_get_set()
 	const size_t NUM_SIZE = (size_t) 1 << 14;
 	size_t *nums = malloc(NUM_SIZE * sizeof(size_t));
 
-	printf("Generating test set... ");
+	note("Generating test set... ");
 	for(size_t i = 0; i < NUM_SIZE; i++) {
 		nums[i] = rand();
 	}
@@ -107,26 +107,23 @@ void test_get_set()
 		}
 	}
 	shuffle(nums, NUM_SIZE);
-	printf("ok\n");
 
-	printf("Settings bits... ");
+	note("Settings bits... ");
 	for(size_t i = 0; i < NUM_SIZE; i++) {
 		if (nums[i] == SIZE_MAX)
 			continue;
 		fail_if(tt_bitset_set(&bm, nums[i]) < 0);
 	}
-	printf("ok\n");
 
-	printf("Checking bits... ");
+	note("Checking bits... ");
 	shuffle(nums, NUM_SIZE);
 	for(size_t i = 0; i < NUM_SIZE; i++) {
 		if (nums[i] == SIZE_MAX)
 			continue;
 		fail_unless(tt_bitset_test(&bm, nums[i]));
 	}
-	printf("ok\n");
 
-	printf("Unsetting random bits... ");
+	note("Unsetting random bits... ");
 	for(size_t k = 0; k < (NUM_SIZE >> 3); k++) {
 		size_t i = rand() % NUM_SIZE;
 		if (nums[i] == SIZE_MAX)
@@ -135,23 +132,19 @@ void test_get_set()
 		fail_if(tt_bitset_test(&bm, nums[i]));
 		nums[i] = SIZE_MAX;
 	}
-	printf("ok\n");
 
-	printf("Checking set bits... ");
+	note("Checking set bits... ");
 	shuffle(nums, NUM_SIZE);
 	for(size_t i = 0; i < NUM_SIZE; i++) {
 		if (nums[i] == SIZE_MAX) {
 			continue;
 		}
 
-		if (!tt_bitset_test(&bm, nums[i])) {
-			printf("Fail :%zu\n", nums[i]);
-		}
+		fail_if(!tt_bitset_test(&bm, nums[i]));
 		fail_unless(tt_bitset_test(&bm, nums[i]));
 	}
-	printf("ok\n");
 
-	printf("Checking all bits... ");
+	note("Checking all bits... ");
 	qsort(nums, NUM_SIZE, sizeof(size_t), size_compator);
 
 	size_t *pn = nums;
@@ -166,10 +159,8 @@ void test_get_set()
 			fail_if(tt_bitset_test(&bm, i));
 		}
 	}
-	printf("ok\n");
 
-
-	printf("Unsetting all bits... ");
+	note("Unsetting all bits... ");
 	shuffle(nums, NUM_SIZE);
 	for(size_t i = 0; i < NUM_SIZE; i++) {
 		if (nums[i] == SIZE_MAX) {
@@ -178,14 +169,11 @@ void test_get_set()
 
 		fail_if(tt_bitset_clear(&bm, nums[i]) < 0);
 	}
-	printf("ok\n");
 
-
-	printf("Checking all bits... ");
+	note("Checking all bits... ");
 	for(size_t i = 0; i < i_max; i++) {
 		fail_if(tt_bitset_test(&bm, i));
 	}
-	printf("ok\n");
 
 	free(nums);
 
@@ -196,10 +184,12 @@ void test_get_set()
 
 int main(int argc, char *argv[])
 {
+	plan(0);
 	setbuf(stdout, NULL);
 	srand(time(NULL));
 	test_cardinality();
 	test_get_set();
+	check_plan();
 
 	return 0;
 }

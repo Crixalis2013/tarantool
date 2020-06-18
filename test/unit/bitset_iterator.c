@@ -482,6 +482,7 @@ int main(void)
 	setbuf(stdout, NULL);
 	nums_fill(NUMS, NUMS_SIZE);
 
+	plan(0);
 	test_empty_expr();
 	test_empty_expr_conj1();
 	test_empty_expr_conj2();
@@ -492,6 +493,7 @@ int main(void)
 	test_not_empty();
 	test_not_last();
 	test_disjunction();
+	check_plan();
 
 	return 0;
 }
