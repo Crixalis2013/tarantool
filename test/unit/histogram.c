@@ -177,8 +177,10 @@ test_percentile(void)
 int
 main()
 {
+	plan(0);
 	srand(time(NULL));
 	test_counts();
 	test_discard();
 	test_percentile();
+	check_plan();
 }
