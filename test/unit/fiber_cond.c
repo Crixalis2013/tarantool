@@ -29,15 +29,16 @@ static void
 fiber_cond_basic()
 {
 	struct fiber_cond *cond = fiber_cond_new();
-	int check = 0;
+	fail_if(!cond);
+	int check = 0, rc = 0;
 
 	struct fiber *f1 = fiber_new("f1", fiber_cond_basic_f);
-	assert(f1 != NULL);
+	fail_if(!f1);
 	fiber_start(f1, cond, &check);
 	fiber_set_joinable(f1, true);
 
 	struct fiber *f2 = fiber_new("f2", fiber_cond_basic_f);
-	assert(f2 != NULL);
+	fail_if(!f2);
 	fiber_start(f2, cond, &check);
 	fiber_set_joinable(f2, true);
 
@@ -59,8 +60,10 @@ fiber_cond_basic()
 	fiber_cond_broadcast(cond);
 	fiber_sleep(0.0);
 
-	fiber_join(f1);
-	fiber_join(f2);
+	rc = fiber_join(f1);
+	fail_if(rc);
+	rc = fiber_join(f2);
+	fail_if(rc);
 
 	fiber_cond_delete(cond);
 }
@@ -81,6 +84,7 @@ main()
 	memory_init();
 	fiber_init(fiber_c_invoke);
 	struct fiber *f = fiber_new("main", main_f);
+	fail_if(!f);
 	fiber_wakeup(f);
 	ev_run(loop(), 0);
 	fiber_free();

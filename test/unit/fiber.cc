@@ -75,19 +75,26 @@ fiber_join_test()
 {
 	header();
 
-	struct fiber *fiber = fiber_new_xc("join", noop_f);
+	int rc;
+	struct fiber *fiber = NULL;
+	fiber = fiber_new_xc("join", noop_f);
+	fail_if(!fiber);
 	fiber_set_joinable(fiber, true);
 	fiber_wakeup(fiber);
-	fiber_join(fiber);
+	rc = fiber_join(fiber);
+	fail_if(rc);
 
 	fiber = fiber_new_xc("cancel", cancel_f);
+	fail_if(!fiber);
 	fiber_set_joinable(fiber, true);
 	fiber_wakeup(fiber);
 	fiber_sleep(0);
 	fiber_cancel(fiber);
-	fiber_join(fiber);
+	rc = fiber_join(fiber);
+	fail_if(!rc);
 
 	fiber = fiber_new_xc("exception", exception_f);
+	fail_if(!fiber);
 	fiber_set_joinable(fiber, true);
 	fiber_wakeup(fiber);
 	try {
@@ -98,8 +105,9 @@ fiber_join_test()
 		note("exception propagated");
 	}
 
-	fputs("#gh-1238: log uncaught errors\n", stderr);
+	note("log uncaught errors (gh-1238)");
 	fiber = fiber_new_xc("exception", exception_f);
+	fail_if(!fiber);
 	fiber_wakeup(fiber);
 
 	/*
@@ -107,14 +115,17 @@ fiber_join_test()
 	 * push them up the stack.
 	 */
 	fiber = fiber_new_xc("no_exception", no_exception_f);
+	fail_if(!fiber);
 	fiber_set_joinable(fiber, true);
 	fiber_wakeup(fiber);
-	fiber_join(fiber);
+	rc = fiber_join(fiber);
+	fail_if(rc);
 	/*
 	 * Trying to cancel a dead joinable cancellable fiber lead to
 	 * a crash, because cancel would try to schedule it.
 	 */
 	fiber = fiber_new_xc("cancel_dead", cancel_dead_f);
+	fail_if(!fiber);
 	fiber_set_joinable(fiber, true);
 	fiber_wakeup(fiber);
 	/** Let the fiber schedule */
@@ -122,7 +133,8 @@ fiber_join_test()
 	fiber_yield();
 	note("by this time the fiber should be dead already");
 	fiber_cancel(fiber);
-	fiber_join(fiber);
+	rc = fiber_join(fiber);
+	fail_if(!rc);
 
 	footer();
 }
@@ -140,6 +152,7 @@ fiber_stack_test()
 	 */
 	stack_expand_limit = default_attr.stack_size * 3 / 4;
 	fiber = fiber_new_xc("test_stack", test_stack_f);
+	fail_if(!fiber);
 	fiber_wakeup(fiber);
 	fiber_sleep(0);
 	note("normal-stack fiber not crashed");
@@ -165,11 +178,12 @@ void
 fiber_name_test()
 {
 	header();
-	note("name of a new fiber: %s.\n", fiber_name(fiber()));
-
-	fiber_set_name(fiber(), "Horace");
-
-	note("set new fiber name: %s.\n", fiber_name(fiber()));
+	const char new_name[] = "Horace";
+	note("name of a fiber: %s", fiber_name(fiber()));
+	fiber_set_name(fiber(), new_name);
+	const char* name = fiber_name(fiber());
+	note("set new fiber name: %s", name);
+	is(strcmp(new_name, name), 0, "fiber has a new name");
 
 	char long_name[FIBER_NAME_MAX + 30];
 	memset(long_name, 'a', sizeof(long_name));
@@ -177,17 +191,24 @@ fiber_name_test()
 
 	fiber_set_name(fiber(), long_name);
 
-	note("fiber name is truncated: %s.\n", fiber_name(fiber()));
+	name = fiber_name(fiber());
+	note("fiber name is truncated: %s", name);
+	size_t truncated_len = strlen(name) + 1;
+	is(truncated_len, FIBER_NAME_MAX,
+	   "fiber name length == FIBER_NAME_MAX (%zu == %d)", truncated_len, FIBER_NAME_MAX);
+
 	footer();
 }
 
 static int
 main_f(va_list ap)
 {
+	plan(2);
 	fiber_name_test();
 	fiber_join_test();
 	fiber_stack_test();
 	ev_break(loop(), EVBREAK_ALL);
+	check_plan();
 	return 0;
 }
 
@@ -196,7 +217,9 @@ int main()
 	memory_init();
 	fiber_init(fiber_cxx_invoke);
 	fiber_attr_create(&default_attr);
-	struct fiber *main = fiber_new_xc("main", main_f);
+	struct fiber *main = NULL;
+	main = fiber_new_xc("main", main_f);
+	fail_if(!main);
 	fiber_wakeup(main);
 	ev_run(loop(), 0);
 	fiber_free();

@@ -19,6 +19,7 @@ main_f(va_list ap)
 	size_t used_before, used_after;
 	struct errinj *inj;
 	struct fiber *fiber;
+	int rc = 0;
 
 	header();
 	plan(6);
@@ -82,7 +83,8 @@ main_f(va_list ap)
 	inj->iparam = PROT_READ | PROT_WRITE;
 
 	fiber_start(fiber);
-	fiber_join(fiber);
+	rc = fiber_join(fiber);
+	fail_if(rc);
 	inj->iparam = -1;
 
 	used_after = slabc->allocated.stats.used;
@@ -97,13 +99,17 @@ main_f(va_list ap)
 
 int main()
 {
+	plan(0);
 	memory_init();
 	fiber_init(fiber_c_invoke);
 	fiber_attr_create(&default_attr);
 	struct fiber *f = fiber_new("main", main_f);
+	fail_if(!f);
 	fiber_wakeup(f);
 	ev_run(loop(), 0);
 	fiber_free();
 	memory_free();
+	check_plan();
+
 	return 0;
 }
