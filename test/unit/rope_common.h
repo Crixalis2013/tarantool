@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "unit.h"
+
 static inline char *
 str_getn(void *ctx, char *data, size_t size, size_t offset)
 {
@@ -68,7 +71,7 @@ test_rope_new()
 static inline void
 test_rope_insert(struct rope *rope, rope_size_t offset, char *str)
 {
-	printf("insert offset = %zu, str = '%s'\n", (size_t) offset, str);
+	note("insert offset = %zu, str = '%s'", (size_t) offset, str);
 	rope_insert(rope, offset, str, strlen(str));
 	rope_pretty_print(rope, str_print);
 	rope_check(rope);
@@ -77,7 +80,7 @@ test_rope_insert(struct rope *rope, rope_size_t offset, char *str)
 static inline void
 test_rope_erase(struct rope *rope, rope_size_t offset)
 {
-	printf("erase offset = %zu\n", (size_t) offset);
+	note("erase offset = %zu", (size_t) offset);
 	rope_erase(rope, offset);
 	rope_pretty_print(rope, str_print);
 	rope_check(rope);

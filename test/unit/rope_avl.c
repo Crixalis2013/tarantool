@@ -36,6 +36,8 @@ test_avl_rotations()
 int
 main()
 {
+	plan(0);
 	test_avl_rotations();
+	check_plan();
 	return 0;
 }

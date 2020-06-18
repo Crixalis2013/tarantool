@@ -97,10 +97,12 @@ test_erase()
 int
 main()
 {
+	plan(0);
 	test_empty_rope();
 	test_append();
 	test_prepend();
 	test_insert();
 	test_erase();
+	check_plan();
 	return 0;
 }

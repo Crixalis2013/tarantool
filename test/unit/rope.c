@@ -4,7 +4,7 @@
 static void
 test_rope_extract(struct rope *rope, rope_size_t pos)
 {
-	printf("extract pos = %zu: ", (size_t) pos);
+	note("extract pos = %zu: ", (size_t) pos);
 	struct rope_node *node = rope_extract_node(rope, pos);
 	rope_check(rope);
 	str_print(node->data, node->leaf_size);
@@ -14,7 +14,7 @@ test_rope_extract(struct rope *rope, rope_size_t pos)
 static inline void
 test_rope_cut(struct rope *rope, rope_size_t offset, rope_size_t size)
 {
-	printf("erase offset = %zu, size = %zu \n", (size_t) offset, (size_t) size);
+	note("erase offset = %zu, size = %zu", (size_t) offset, (size_t) size);
 	while (size-- > 0)
 		rope_erase(rope, offset);
 	rope_pretty_print(rope, str_print);
@@ -63,6 +63,8 @@ test_rope()
 int
 main()
 {
+	plan(0);
 	test_rope();
+	check_plan();
 	return 0;
 }

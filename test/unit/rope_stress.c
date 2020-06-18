@@ -64,8 +64,10 @@ test_rope_stress_large()
 int
 main()
 {
+	plan(0);
 	srand(time(NULL));
 	test_rope_stress_small();
 	test_rope_stress_large();
+	check_plan();
 	return 0;
 }
