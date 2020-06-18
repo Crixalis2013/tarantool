@@ -53,7 +53,7 @@ iterator_check()
 			rtree_insert(&tree, &rect, record_t(++count));
 		}
 	}
-	printf("Test tree size: %d\n", (int)rtree_number_of_records(&tree));
+	note("Test tree size: %d", (int)rtree_number_of_records(&tree));
 
 	/* Test that tree filled ok */
 	for (size_t i = 0; i < count1; i++) {
@@ -305,9 +305,11 @@ iterator_invalidate_check()
 int
 main(void)
 {
+	plan(0);
 	iterator_check();
 	iterator_invalidate_check();
 	if (extent_count != 0) {
 		fail("memory leak!", "false");
 	}
+	check_plan();
 }

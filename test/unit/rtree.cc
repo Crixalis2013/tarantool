@@ -43,7 +43,7 @@ simple_check()
 		   extent_alloc, extent_free, &page_count,
 		   RTREE_EUCLID);
 
-	printf("Insert 1..X, remove 1..X\n");
+	note("Insert 1..X, remove 1..X");
 	for (size_t i = 1; i <= rounds; i++) {
 		record_t rec = (record_t)i;
 
@@ -82,7 +82,7 @@ simple_check()
 		fail("Tree count mismatch (1)", "true");
 	}
 
-	printf("Insert 1..X, remove X..1\n");
+	note("Insert 1..X, remove X..1");
 	for (size_t i = 1; i <= rounds; i++) {
 		record_t rec = (record_t)i;
 
@@ -122,7 +122,7 @@ simple_check()
 	}
 
 
-	printf("Insert X..1, remove 1..X\n");
+	note("Insert X..1, remove 1..X");
 	for (size_t i = rounds; i != 0; i--) {
 		record_t rec = (record_t)i;
 
@@ -162,7 +162,7 @@ simple_check()
 	}
 
 
-	printf("Insert X..1, remove X..1\n");
+	note("Insert X..1, remove X..1");
 	for (size_t i = rounds; i != 0; i--) {
 		record_t rec = (record_t)i;
 
@@ -279,9 +279,11 @@ neighbor_test()
 int
 main(void)
 {
+	plan(0);
 	simple_check();
 	neighbor_test();
 	if (page_count != 0) {
 		fail("memory leak!", "true");
 	}
+	check_plan();
 }

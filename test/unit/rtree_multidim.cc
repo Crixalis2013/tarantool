@@ -348,14 +348,14 @@ test_select_neigh(const CBoxSet<DIMENSION> &set, const struct rtree *tree)
 		}
 	}
 	if (res1.size() != res2.size()) {
-		printf("%s result size differ %d %d\n", __func__,
-		       (int)res1.size(), (int)res2.size());
+		diag("%s result size differ %d %d\n", __func__,
+		     (int)res1.size(), (int)res2.size());
 	} else {
 		for (size_t i = 0; i < res1.size(); i++)
 			if (res1[i].id != res2[i].id &&
 			    res1[i].box.Distance2(box) !=
 			    res2[i].box.Distance2(box))
-				printf("%s result differ!\n", __func__);
+				diag("%s result differ!\n", __func__);
 	}
 	rtree_iterator_destroy(&iterator);
 
@@ -388,14 +388,14 @@ test_select_neigh_man(const CBoxSet<DIMENSION> &set, struct rtree *tree)
 		}
 	}
 	if (res1.size() != res2.size()) {
-		printf("%s result size differ %d %d\n", __func__,
-		       (int)res1.size(), (int)res2.size());
+		diag("%s result size differ %d %d\n", __func__,
+		     (int)res1.size(), (int)res2.size());
 	} else {
 		for (size_t i = 0; i < res1.size(); i++)
 			if (res1[i].id != res2[i].id &&
 			    res1[i].box.DistanceMan(box) !=
 			    res2[i].box.DistanceMan(box))
-				printf("%s result differ!\n", __func__);
+				diag("%s result differ!\n", __func__);
 	}
 	tree->distance_type = RTREE_EUCLID; /* dirty hack */
 	rtree_iterator_destroy(&iterator);
@@ -428,12 +428,12 @@ test_select_in(const CBoxSet<DIMENSION> &set, const struct rtree *tree)
 	sort(res1.begin(), res1.end());
 	sort(res2.begin(), res2.end());
 	if (res1.size() != res2.size()) {
-		printf("%s result size differ %d %d\n", __func__,
-		       (int)res1.size(), (int)res2.size());
+		diag("%s result size differ %d %d\n", __func__,
+		     (int)res1.size(), (int)res2.size());
 	} else {
 		for (size_t i = 0; i < res1.size(); i++)
 			if (res1[i].id != res2[i].id)
-				printf("%s result differ!\n", __func__);
+				diag("%s result differ!\n", __func__);
 	}
 	rtree_iterator_destroy(&iterator);
 
@@ -465,12 +465,12 @@ test_select_strict_in(const CBoxSet<DIMENSION> &set, const struct rtree *tree)
 	sort(res1.begin(), res1.end());
 	sort(res2.begin(), res2.end());
 	if (res1.size() != res2.size()) {
-		printf("%s result size differ %d %d\n", __func__,
-		       (int)res1.size(), (int)res2.size());
+		diag("%s result size differ %d %d\n", __func__,
+		     (int)res1.size(), (int)res2.size());
 	} else {
 		for (size_t i = 0; i < res1.size(); i++)
 			if (res1[i].id != res2[i].id)
-				printf("%s result differ!\n", __func__);
+				diag("%s result differ!\n", __func__);
 	}
 	rtree_iterator_destroy(&iterator);
 
@@ -489,8 +489,8 @@ rand_test()
 		   extent_alloc, extent_free, &page_count,
 		   RTREE_EUCLID);
 
-	printf("\tDIMENSION: %u, page size: %u, max fill good: %d\n",
-	       DIMENSION, tree.page_size, tree.page_max_fill >= 10);
+	note("\tDIMENSION: %u, page size: %u, max fill good: %d\n",
+              DIMENSION, tree.page_size, tree.page_max_fill >= 10);
 
 	for (unsigned i = 0; i < TEST_ROUNDS; i++) {
 		bool insert;
@@ -513,7 +513,7 @@ rand_test()
 			struct rtree_rect rt;
 			set.entries[id].box.FillRTreeRect(&rt);
 			if (!rtree_remove(&tree, &rt, (void *)(id + 1))) {
-				printf("Error in remove\n");
+				diag("Error in remove\n");
 			}
 			set.DeleteBox(id);
 		}
@@ -532,6 +532,7 @@ rand_test()
 int
 main(void)
 {
+	plan(0);
 	srand(time(0));
 	rand_test<1>();
 	rand_test<2>();
@@ -541,4 +542,5 @@ main(void)
 	if (page_count != 0) {
 		fail("memory leak!", "true");
 	}
+	check_plan();
 }
