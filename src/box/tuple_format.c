@@ -152,7 +152,7 @@ tuple_field_new(void)
 	field->type = FIELD_TYPE_ANY;
 	field->offset_slot = TUPLE_OFFSET_SLOT_NIL;
 	field->coll_id = COLL_NONE;
-	field->nullable_action = ON_CONFLICT_ACTION_DEFAULT;
+	field->nullable_action = ON_CONFLICT_ACTION_NONE;
 	field->multikey_required_fields = NULL;
 	return field;
 }
@@ -528,6 +528,10 @@ tuple_format_create(struct tuple_format *format, struct key_def * const *keys,
 				multikey_required_fields;
 			required_fields = multikey_required_fields;
 		}
+		if ((field->type == FIELD_TYPE_ARRAY ||
+		    field->type == FIELD_TYPE_MAP) &&
+		    tuple_field_is_nullable(field))
+			field->nullable_action = ON_CONFLICT_ACTION_DEFAULT;
 		/*
 		 * Mark all leaf non-nullable fields as required
 		 * by setting the corresponding bit in the bitmap

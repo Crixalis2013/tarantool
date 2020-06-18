@@ -210,3 +210,15 @@ ddd:delete(ffi.cast('double', 123))
 s:select()
 
 s:drop()
+
+-- gh-5027: Do not require extra fields
+s = box.schema.space.create('test')
+i1 = s:create_index('i1', {parts={{1, 'unsigned'}}})
+i2 = s:create_index('i2', {parts={{5, 'unsigned', is_nullable=true}}})
+s:insert{1, 2, 3}
+s:drop()
+s = box.schema.space.create('test')
+i1 = s:create_index('i1', {parts={{1, 'unsigned'}}})
+i2 = s:create_index('i2', {parts={{5, 'unsigned', is_nullable=false}}})
+s:insert{1, 2, 3}
+s:drop()
