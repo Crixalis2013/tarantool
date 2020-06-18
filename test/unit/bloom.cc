@@ -2,6 +2,7 @@
 #include <unordered_set>
 #include <vector>
 #include <iostream>
+#include "unit.h"
 
 using namespace std;
 
@@ -13,7 +14,7 @@ uint32_t h(uint32_t i)
 void
 simple_test()
 {
-	cout << "*** " << __func__ << " ***" << endl;
+	header();
 	srand(time(0));
 	uint32_t error_count = 0;
 	uint32_t fp_rate_too_big = 0;
@@ -45,14 +46,15 @@ simple_test()
 		if (fp_rate > p + 0.001)
 			fp_rate_too_big++;
 	}
-	cout << "error_count = " << error_count << endl;
-	cout << "fp_rate_too_big = " << fp_rate_too_big << endl;
+	is(error_count, 0, "error_count = %u", error_count);
+	is(fp_rate_too_big, 0, "fp_rate_too_big = %u", fp_rate_too_big);
+	footer();
 }
 
 void
 store_load_test()
 {
-	cout << "*** " << __func__ << " ***" << endl;
+	header();
 	srand(time(0));
 	uint32_t error_count = 0;
 	uint32_t fp_rate_too_big = 0;
@@ -92,13 +94,16 @@ store_load_test()
 		if (fp_rate > p + 0.001)
 			fp_rate_too_big++;
 	}
-	cout << "error_count = " << error_count << endl;
-	cout << "fp_rate_too_big = " << fp_rate_too_big << endl;
+	is(error_count, 0, "error_count = %u", error_count);
+	is(fp_rate_too_big, 0, "fp_rate_too_big = %u", fp_rate_too_big);
+	footer();
 }
 
 int
 main(void)
 {
+	plan(4);
 	simple_test();
 	store_load_test();
+	check_plan();
 }
