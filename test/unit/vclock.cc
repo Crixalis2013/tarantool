@@ -412,6 +412,5 @@ main(void)
 	test_tostring();
 	test_fromstring();
 	test_fromstring_invalid();
-
-	return check_plan();
+	check_plan();
 }
