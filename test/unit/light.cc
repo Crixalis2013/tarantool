@@ -80,11 +80,7 @@ simple_test()
 			hash_t fnd = light_find(&ht, h, val);
 			bool has1 = fnd != light_end;
 			bool has2 = vect[val];
-			assert(has1 == has2);
-			if (has1 != has2) {
-				fail("find key failed!", "true");
-				return;
-			}
+			fail_if(has1 != has2);
 
 			if (!has1) {
 				count++;
@@ -144,11 +140,7 @@ collision_test()
 			hash_t fnd = light_find(&ht, h * 1024, val);
 			bool has1 = fnd != light_end;
 			bool has2 = vect[val];
-			assert(has1 == has2);
-			if (has1 != has2) {
-				fail("find key failed!", "true");
-				return;
-			}
+			fail_if(has1 != has2);
 
 			if (!has1) {
 				count++;
@@ -320,6 +312,7 @@ iterator_freeze_check()
 int
 main(int, const char**)
 {
+	plan(0);
 	srand(time(0));
 	simple_test();
 	collision_test();
@@ -327,4 +320,5 @@ main(int, const char**)
 	iterator_freeze_check();
 	if (extents_count != 0)
 		fail("memory leak!", "true");
+	check_plan();
 }
