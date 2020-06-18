@@ -124,9 +124,9 @@ static int compare_key(const elem_t &a, long b)
 		type_t check_value =\
 			*tree_name##_iterator_get_elem((tree), &iter);\
 		if (check_value != (type_t)(elem)) {\
-			printf("iterator doesn't point to the inserted "\
-			       "element: %lld != %lld", (long long) (elem),\
-			       (long long) check_value);\
+			diag("iterator doesn't point to the inserted "\
+			     "element: %lld != %lld", (long long) (elem),\
+			     (long long) check_value);\
 			fail("elem != check_value", "true");\
 		}\
 	}\
@@ -173,7 +173,7 @@ simple_check()
 	test tree;
 	test_create(&tree, 0, extent_alloc, extent_free, &extents_count);
 
-	printf("Insert 1..X, remove 1..X\n");
+	note("Insert 1..X, remove 1..X");
 	for (unsigned int i = 0; i < rounds; i++) {
 		type_t v = i;
 		if (test_find(&tree, v) != NULL)
@@ -200,7 +200,7 @@ simple_check()
 	if (test_size(&tree) != 0)
 		fail("Tree count mismatch (2)", "true");
 
-	printf("Insert 1..X, remove X..1\n");
+	note("Insert 1..X, remove X..1");
 	for (unsigned int i = 0; i < rounds; i++) {
 		type_t v = i;
 		if (test_find(&tree, v) != NULL)
@@ -227,7 +227,7 @@ simple_check()
 	if (test_size(&tree) != 0)
 		fail("Tree count mismatch (4)", "true");
 
-	printf("Insert X..1, remove 1..X\n");
+	note("Insert X..1, remove 1..X");
 	for (unsigned int i = 0; i < rounds; i++) {
 		type_t v = rounds - 1 - i;
 		if (test_find(&tree, v) != NULL)
@@ -254,7 +254,7 @@ simple_check()
 	if (test_size(&tree) != 0)
 		fail("Tree count mismatch (6)", "true");
 
-	printf("Insert X..1, remove X..1\n");
+	note("Insert X..1, remove X..1");
 	for (unsigned int i = 0; i < rounds; i++) {
 		type_t v = rounds - 1 - i;
 		if (test_find(&tree, v) != NULL)
@@ -581,7 +581,7 @@ bps_tree_debug_self_check()
 
 	int res = test_debug_check_internal_functions(false);
 	if (res)
-		printf("self test returned error %d\n", res);
+		diag("self test returned error %d", res);
 
 	test_debug_check_internal_functions(true);
 
@@ -639,11 +639,11 @@ printing_test()
 
 	for (type_t i = 0; i < rounds; i++) {
 		type_t v = rounds + i;
-		printf("Inserting " TYPE_F "\n", v);
+		note("Inserting " TYPE_F, v);
 		test_insert(&tree, v, 0);
 		test_print(&tree, TYPE_F);
 		v = rounds - i - 1;
-		printf("Inserting " TYPE_F "\n", v);
+		note("Inserting " TYPE_F, v);
 		test_insert(&tree, v, 0);
 		test_print(&tree, TYPE_F);
 	}
@@ -664,33 +664,33 @@ white_box_test()
 	assert(BPS_TREE_test_MAX_COUNT_IN_LEAF == 14);
 	assert(BPS_TREE_test_MAX_COUNT_IN_INNER == 10);
 
-	printf("full leaf:\n");
+	note("full leaf:");
 	for (type_t i = 0; i < 14; i++) {
 		test_insert(&tree, i, 0);
 	}
 	test_print(&tree, TYPE_F);
 
-	printf("split now:\n");
+	note("split now:");
 	test_insert(&tree, 14, 0);
 	test_print(&tree, TYPE_F);
 
-	printf("full 2 leafs:\n");
+	note("full 2 leafs:");
 	for (type_t i = 15; i < 28; i++) {
 		test_insert(&tree, i, 0);
 	}
 	test_print(&tree, TYPE_F);
 
-	printf("split now:\n");
+	note("split now:");
 	test_insert(&tree, 28, 0);
 	test_print(&tree, TYPE_F);
 
-	printf("full 3 leafs:\n");
+	note("full 3 leafs:");
 	for (type_t i = 29; i < 42; i++) {
 		test_insert(&tree, i, 0);
 	}
 	test_print(&tree, TYPE_F);
 
-	printf("split now:\n");
+	note("split now:");
 	test_insert(&tree, 42, 0);
 	test_print(&tree, TYPE_F);
 
@@ -700,10 +700,10 @@ white_box_test()
 	for (type_t i = 0; i < 140; i++)
 		arr[i] = i;
 	test_build(&tree, arr, 140);
-	printf("full 10 leafs:\n");
+	note("full 10 leafs:");
 	test_print(&tree, TYPE_F);
 
-	printf("2-level split now:\n");
+	note("2-level split now:");
 	test_insert(&tree, 140, 0);
 	test_print(&tree, TYPE_F);
 
@@ -749,7 +749,7 @@ approximate_count()
 	for (uint64_t i = 1; i <= long_sequence_count; i++)
 		for (uint64_t j = 0; j < i * long_sequence_multiplier; j++)
 			arr[count++] = ((i * 100 + 50) << 32) | j;
-	printf("Count: %llu %u\n", (unsigned long long)count, arr_size);
+	note("Count: %llu %u", (unsigned long long)count, arr_size);
 	assert(count == arr_size);
 
 	for (uint64_t i = 0; i < count * 10; i++) {
@@ -763,7 +763,7 @@ approximate_count()
 	for (uint64_t i = 0; i < count; i++)
 		approx_insert(&tree, arr[i], NULL);
 
-	printf("Count: %zu\n", tree.size);
+	note("Count: %zu", tree.size);
 
 	count = 0;
 	int err_count = 0;
@@ -788,9 +788,9 @@ approximate_count()
 			if (approx_count != true_count) {
 				err_count++;
 				if (err_count <= 10)
-					printf("searching %u found %llu expected %llu\n",
-					       i, (unsigned long long)approx_count,
-					       (unsigned long long)true_count);
+					diag("searching %u found %llu expected %llu\n",
+					     i, (unsigned long long)approx_count,
+					     (unsigned long long)true_count);
 			}
 			continue;
 		}
@@ -802,14 +802,14 @@ approximate_count()
 		if (true_count < low || true_count > up) {
 			err_count++;
 			if (err_count <= 10)
-				printf("searching %u found %llu expected %llu\n",
-				       i, (unsigned long long)approx_count,
-				       (unsigned long long)true_count);
+				diag("searching %u found %llu expected %llu\n",
+				     i, (unsigned long long)approx_count,
+				     (unsigned long long)true_count);
 		}
 	};
 
-	printf("Error count: %d\n", err_count);
-	printf("Count: %llu\n", (unsigned long long)count);
+	note("Error count: %d", err_count);
+	note("Count: %llu", (unsigned long long)count);
 
 	approx_destroy(&tree);
 
@@ -861,6 +861,7 @@ delete_value_check()
 int
 main(void)
 {
+	plan(0);
 	simple_check();
 	compare_with_sptree_check();
 	compare_with_sptree_check_branches();
@@ -873,4 +874,5 @@ main(void)
 		fail("memory leak!", "true");
 	insert_get_iterator();
 	delete_value_check();
+	check_plan();
 }

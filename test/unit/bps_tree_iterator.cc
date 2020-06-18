@@ -94,7 +94,7 @@ iterator_check()
 			test_insert(&tree, e, 0);
 		}
 	}
-	printf("Test tree size: %d\n", (int)test_size(&tree));
+	note("Test tree size: %d\n", (int)test_size(&tree));
 
 	/* Test that tree filled ok */
 	for (long i = 0; i < count1 * count2; i++) {
@@ -114,7 +114,6 @@ iterator_check()
 			printf("(%ld,%ld) ", elem->first, elem->second);
 			test_iterator_next(&tree, &iterator);
 		}
-		printf("\n");
 	}
 	/* Print last 7 elems */
 	{
@@ -125,7 +124,6 @@ iterator_check()
 			printf("(%ld,%ld) ", elem->first, elem->second);
 			test_iterator_prev(&tree, &iterator);
 		}
-		printf("\n");
 	}
 
 	/* Iterate forward all elements 5 times */
@@ -181,9 +179,9 @@ iterator_check()
 		if (has_this_key1 != has_this_key2)
 			fail("Exact flag is broken", "true");
 		printf("Key %ld, %s range [%s, %s): ", key,
-			has_this_key1 ? "not empty" : "empty",
-			test_iterator_is_invalid(&begin) ? "eof" : "ptr",
-			test_iterator_is_invalid(&end) ? "eof" : "ptr");
+		       has_this_key1 ? "not empty" : "empty",
+		       test_iterator_is_invalid(&begin) ? "eof" : "ptr",
+		       test_iterator_is_invalid(&end) ? "eof" : "ptr");
 		test_iterator runner = begin;
 		while (!test_iterator_are_equal(&tree, &runner, &end)) {
 			elem_t *elem = test_iterator_get_elem(&tree, &runner);
@@ -197,7 +195,6 @@ iterator_check()
 			elem_t *elem = test_iterator_get_elem(&tree, &runner);
 			printf("(%ld,%ld) ", elem->first, elem->second);
 		}
-		printf("\n");
 	}
 
 	/* Check iterating in range from lower bound to upper bound */
@@ -246,7 +243,6 @@ iterator_check()
 			elem_t *elem = test_iterator_get_elem(&tree, &runner);
 			printf("(%ld,%ld) ", elem->first, elem->second);
 		}
-		printf("\n");
 	}
 
 	/* Check iterating in range from lower bound to upper bound */
@@ -547,10 +543,10 @@ int
 main(void)
 {
 	srand(time(0));
+	plan(1);
 	iterator_check();
 	iterator_invalidate_check();
 	iterator_freeze_check();
-	if (total_extents_allocated) {
-		fail("memory leak", "true");
-	}
+	is(total_extents_allocated, 0, "memory leak");
+	check_plan();
 }
