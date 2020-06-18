@@ -9,7 +9,7 @@ test_basic(void)
 {
 	header();
 
-	plan(12);
+	plan(9);
 
 	/* Create key_def */
 	uint32_t fields[] = { 0 };
@@ -334,11 +334,13 @@ test_iterator_restore_after_insertion()
 int
 main(int argc, char *argv[])
 {
+	plan(2);
 	vy_iterator_C_test_init(0);
 
 	test_basic();
 	test_iterator_restore_after_insertion();
 
 	vy_iterator_C_test_finish();
+	check_plan();
 	return 0;
 }
