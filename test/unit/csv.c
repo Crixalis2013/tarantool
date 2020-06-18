@@ -82,6 +82,7 @@ void small_string_test(const char* const s)
 	csv.emit_row = print_endl;
 	csv_parse_chunk(&csv, s, s + strlen(s));
 	csv_finish_parsing(&csv);
+	fail_if(csv.error_status == CSV_ER_INVALID);
 	csv_destroy(&csv);
 }
 
@@ -133,7 +134,7 @@ void test5() {
 	csv_setopt(&csv, CSV_OPT_DELIMITER, '\t');
 	csv_parse_chunk(&csv, s, s + strlen(s));
 	csv_finish_parsing(&csv);
-	printf("valid: %s\n", csv.error_status == CSV_ER_INVALID ? "NO" : "yes");
+	fail_if(csv.error_status == CSV_ER_INVALID);
 	csv_destroy(&csv);
 	footer();
 }
@@ -150,7 +151,7 @@ void test6() {
 	csv_parse_chunk(&csv, s2, s2 + 2);
 	csv_parse_chunk(&csv, s2 + 2, s2 + strlen(s2));
 	csv_finish_parsing(&csv);
-	printf("valid: %s\n", csv_get_error_status(&csv) == CSV_ER_INVALID ? "NO" : "yes");
+	fail_if(csv_get_error_status(&csv) == CSV_ER_INVALID);
 	csv_destroy(&csv);
 	footer();
 }
@@ -207,6 +208,7 @@ void big_chunk_separated_test() {
 	}
 	csv_parse_chunk(&csv, bufp, buf + bufn);
 	csv_finish_parsing(&csv);
+	fail_if(csv.error_status == CSV_ER_INVALID);
 
 	//without fieldsizes counts without commas and spaces
 	printf("line_cnt=%d, fieldsizes_cnt=%d, %d\n", (int)cnt.line_cnt, (int)cnt.fieldsizes_cnt,
@@ -245,7 +247,7 @@ void random_generated_test() {
 	csv_parse_chunk(&csv, rand_test, rand_test + strlen(rand_test));
 	csv_finish_parsing(&csv);
 	printf("line_cnt=%d, fieldsizes_cnt=%d\n", (int)cnt.line_cnt, (int)cnt.fieldsizes_cnt);
-	printf("valid: %s\n", csv_get_error_status(&csv) == CSV_ER_INVALID ? "NO" : "yes");
+	fail_if(csv_get_error_status(&csv) == CSV_ER_INVALID);
 	csv_destroy(&csv);
 
 	footer();
@@ -272,7 +274,7 @@ void iter_test1() {
 			print_field(0, it.field, it.field + it.field_len);
 			break;
 		case CSV_IT_ERROR:
-			printf("\nerror");
+			diag("\nerror");
 			break;
 		}
 	}
@@ -302,7 +304,7 @@ void iter_test2() {
 			print_field(0, it.field, it.field + it.field_len);
 			break;
 		case CSV_IT_ERROR:
-			printf("\nerror");
+			diag("\nerror");
 			break;
 		}
 	}
@@ -333,7 +335,7 @@ void iter_test3() {
 			print_field(0, it.field, it.field + it.field_len);
 			break;
 		case CSV_IT_ERROR:
-			printf("\nerror");
+			diag("\nerror");
 			break;
 		}
 	}
@@ -358,6 +360,7 @@ void csv_out() {
 }
 
 int main() {
+	plan(0);
 	test1();
 	test2();
 	test3();
@@ -427,5 +430,6 @@ int main() {
 
 	//output test
 	csv_out();
+	check_plan();
 	return 0;
 }
