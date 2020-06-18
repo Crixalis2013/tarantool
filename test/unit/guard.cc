@@ -53,6 +53,7 @@ main_f(va_list ap)
 
 int main()
 {
+	plan(0);
 	memory_init();
 	fiber_init(fiber_cxx_invoke);
 	fiber_attr_create(&default_attr);
@@ -62,5 +63,6 @@ int main()
 	fiber_free();
 	memory_free();
 	fail("signal handler was not executed", "");
+	check_plan();
 	return 0;
 }
