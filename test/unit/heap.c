@@ -533,6 +533,7 @@ test_heapify()
 int
 main(int argc, const char** argv)
 {
+	plan(0);
 	srand(179);
 	test_insert_1_to_3();
 	test_insert_3_to_1();
@@ -546,4 +547,5 @@ main(int argc, const char** argv)
 	test_random_delete_workload();
 	test_delete_last_node();
 	test_heapify();
+	check_plan();
 }

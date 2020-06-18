@@ -188,8 +188,10 @@ int
 main(int argc, const char** argv)
 {
 	srand(179);
+	plan(0);
 	test_iterator_create();
 	test_iterator_empty();
 	test_iterator_small();
 	test_iterator_large();
+	check_plan();
 }
