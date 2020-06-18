@@ -5,16 +5,16 @@
 
 int print_stat(const char *name, int rps, int64_t total, void* ctx)
 {
-	printf("%s: rps %d, total %d%c", name, rps, (int)total,
-	       name[2] == '2' ? '\n' : '\t');
+	note("%s: rps %d, total %d%c", name, rps, (int)total,
+	     name[2] == '2' ? '\n' : '\t');
 	return 0;
 }
 
 void test_100rps(rmean *st)
 {
 	header();
-	printf("Send 100 requests every second for 10 seconds\n");
-	printf("Calc rps at third and last second\n");
+	note("Send 100 requests every second for 10 seconds");
+	note("Calc rps at third and last second");
 	for(int i = 0; i < 10; i++) { /* 10 seconds */
 		rmean_collect(st, 0, 100); /* send 100 requests */
 		rmean_roll(st->stats[0].value, 1);
@@ -35,7 +35,7 @@ void test_100rps(rmean *st)
 void test_mean15rps(rmean *st)
 {
 	header();
-	printf("Send 15 rps on the average, and 3 rps to EV2\n");
+	note("Send 15 rps on the average, and 3 rps to EV2");
 	for(int i = 0; i < 10; i++) { /* 10 seconds */
 		for(int j = 0; j < 15; j++) {
 			rmean_collect(st, 0, 1); /* send 15 requests */
@@ -58,7 +58,8 @@ void test_mean15rps(rmean *st)
 
 int main()
 {
-	printf("Stat. 2 names, timer simulation\n");
+	plan(0);
+	note("Stat. 2 names, timer simulation");
 
 	memory_init();
 	fiber_init(fiber_cxx_invoke);
@@ -74,5 +75,7 @@ int main()
 
 	fiber_free();
 	memory_free();
+	check_plan();
+
 	return 0;
 }
