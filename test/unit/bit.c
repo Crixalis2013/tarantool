@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 #include <inttypes.h>
-#include <assert.h>
 #include <stdlib.h>
 
 #include "unit.h"
@@ -29,18 +28,18 @@ test_ctz_clz(void)
 		uint64_t val64 = vals[i];
 		uint32_t val32 = (uint32_t) vals[i];
 
-		printf("bit_ctz_u64(%" PRIu64 ") => %d\n", val64,
-			bit_ctz_u64(val64));
-		printf("bit_clz_u64(%" PRIu64 ") => %d\n", val64,
-			bit_clz_u64(val64));
+		note("bit_ctz_u64(%" PRIu64 ") => %d", val64,
+		     bit_ctz_u64(val64));
+		note("bit_clz_u64(%" PRIu64 ") => %d", val64,
+		     bit_clz_u64(val64));
 
 		if (vals[i] > UINT32_MAX)
 			continue;
 
-		printf("bit_ctz_u32(%" PRIu32 ") => %d\n", val32,
-			bit_ctz_u32(val32));
-		printf("bit_clz_u32(%" PRIu32 ") => %d\n", val32,
-			bit_clz_u32(val32));
+		note("bit_ctz_u32(%" PRIu32 ") => %d", val32,
+		     bit_ctz_u32(val32));
+		note("bit_clz_u32(%" PRIu32 ") => %d", val32,
+		     bit_clz_u32(val32));
 	}
 
 	footer();
@@ -55,14 +54,14 @@ test_count(void)
 		uint64_t val64 = vals[i];
 		uint32_t val32 = (uint32_t) vals[i];
 
-		printf("bit_count_u64(%" PRIu64 ") => %d\n", val64,
-			bit_count_u64(val64));
+		note("bit_count_u64(%" PRIu64 ") => %d", val64,
+		     bit_count_u64(val64));
 
 		if (vals[i] > UINT32_MAX)
 			continue;
 
-		printf("bit_count_u32(%" PRIu32 ") => %d\n", val32,
-			bit_count_u32(val32));
+		note("bit_count_u32(%" PRIu32 ") => %d", val32,
+		     bit_count_u32(val32));
 	}
 
 	footer();
@@ -75,18 +74,18 @@ test_rotl_rotr_one(int rot)
 		uint64_t val64 = vals[i];
 		uint32_t val32 = (uint32_t) vals[i];
 
-		printf("bit_rotl_u64(%" PRIu64 ", %d) => %" PRIu64 "\n",
-		       val64, rot, bit_rotl_u64(val64, rot));
-		printf("bit_rotr_u64(%" PRIu64 ", %d) => %" PRIu64 "\n",
-		       val64, rot, bit_rotr_u64(val64, rot));
+		note("bit_rotl_u64(%" PRIu64 ", %d) => %" PRIu64,
+		     val64, rot, bit_rotl_u64(val64, rot));
+		note("bit_rotr_u64(%" PRIu64 ", %d) => %" PRIu64,
+		     val64, rot, bit_rotr_u64(val64, rot));
 
 		if (vals[i] > UINT32_MAX || rot >= 32)
 			continue;
 
-		printf("bit_rotl_u32(%" PRIu32 ", %d) => %" PRIu32 "\n",
-		       val32, rot, bit_rotl_u32(val32, rot));
-		printf("bit_rotr_u32(%" PRIu32 ", %d) => %" PRIu32 "\n",
-		       val32, rot, bit_rotr_u32(val32, rot));
+		note("bit_rotl_u32(%" PRIu32 ", %d) => %" PRIu32,
+		     val32, rot, bit_rotl_u32(val32, rot));
+		note("bit_rotr_u32(%" PRIu32 ", %d) => %" PRIu32,
+		     val32, rot, bit_rotr_u32(val32, rot));
 	}
 }
 
@@ -112,14 +111,14 @@ test_bswap(void)
 		uint64_t val64 = vals[i];
 		uint32_t val32 = (uint32_t) vals[i];
 
-		printf("bswap_u64(%" PRIu64 ") => %" PRIu64 "\n", val64,
-			bswap_u64(val64));
+		note("bswap_u64(%" PRIu64 ") => %" PRIu64, val64,
+		     bswap_u64(val64));
 
 		if (vals[i] > UINT32_MAX)
 			continue;
 
-		printf("bswap_u32(%" PRIu32 ") => %" PRIu32 "\n", val32,
-			bswap_u32(val32));
+		note("bswap_u32(%" PRIu32 ") => %" PRIu32, val32,
+		     bswap_u32(val32));
 	}
 
 	footer();
@@ -223,6 +222,7 @@ test_bitmap_size(void)
 int
 main(void)
 {
+	plan(0);
 	test_ctz_clz();
 	test_count();
 	test_rotl_rotr();
@@ -231,4 +231,5 @@ main(void)
 	test_bit_iter();
 	test_bit_iter_empty();
 	test_bitmap_size();
+	check_plan();
 }
