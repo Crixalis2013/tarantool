@@ -126,7 +126,7 @@ thread_create(struct thread *t, int id)
 	active_thread_count++;
 
 	if (cord_costart(&t->cord, t->name, thread_func, t) != 0)
-		unreachable();
+		diag("reached unreachable state");
 
 	cpipe_create(&t->thread_pipe, t->name);
 }
@@ -162,7 +162,7 @@ thread_destroy(struct thread *t)
 	cpipe_destroy(&t->thread_pipe);
 
 	if (cord_join(&t->cord) != 0)
-		unreachable();
+		diag("reached unreachable state");
 
 	free(t->connected);
 	free(t->disconnected);
@@ -368,6 +368,7 @@ main()
 {
 	srand(time(NULL));
 
+	plan(0);
 	memory_init();
 	fiber_init(fiber_c_invoke);
 	cbus_init();
@@ -379,6 +380,7 @@ main()
 	fiber_wakeup(main_fiber);
 	ev_run(loop(), 0);
 
+	check_plan();
 	footer();
 
 	cbus_free();

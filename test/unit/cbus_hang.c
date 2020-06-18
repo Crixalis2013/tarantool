@@ -33,7 +33,7 @@ pthread_cond_t endpoint_hack_cond_2;
 static
 void join_fail(int signum) {
 	(void)signum;
-	printf("Can't join the hang worker\n");
+	diag("Can't join the hang worker\n");
 	exit(EXIT_FAILURE);
 }
 
@@ -148,8 +148,8 @@ main_f(va_list ap)
 	cbus_stop_loop(&pipe_from_main_to_hang);
 	cpipe_destroy(&pipe_from_main_to_hang);
 
-	cord_join(&hang_worker);
-	ok(true, "The hang worker has been joined");
+	int rc = cord_join(&hang_worker);
+	ok(!rc, "The hang worker has been joined");
 	alarm(0);
 
 	ev_break(loop(), EVBREAK_ALL);

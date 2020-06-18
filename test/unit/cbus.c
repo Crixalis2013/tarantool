@@ -49,7 +49,7 @@ flush_cb(struct trigger *t, void *e)
 	(void) t;
 	(void) e;
 	++flushed_cnt;
-	printf("flush event, counter = %d\n", flushed_cnt);
+	note("flush event, counter = %d", flushed_cnt);
 	return 0;
 }
 
@@ -59,7 +59,7 @@ finish_execution(struct cmsg *m)
 {
 	(void) m;
 	fiber_cancel(fiber());
-	printf("break main fiber and finish test\n");
+	note("break main fiber and finish test");
 	is(flushed_cnt, expected_flushed_cnt,
 	   "flushed_cnt at the end of the test");
 }
@@ -84,7 +84,7 @@ worker_f(va_list ap)
 static void
 worker_start()
 {
-	printf("start worker\n");
+	note("start worker");
 	fail_if(cord_costart(&worker, "worker", worker_f, NULL) != 0);
 	cpipe_create(&pipe_to_worker, "worker");
 }
@@ -92,7 +92,7 @@ worker_start()
 static void
 worker_stop()
 {
-	printf("finish worker\n");
+	note("finish worker");
 	cbus_stop_loop(&pipe_to_worker);
 	cpipe_destroy(&pipe_to_worker);
 	fail_if(cord_join(&worker) != 0);
@@ -126,7 +126,7 @@ test_forced_flush(struct cmsg *m)
 {
 	(void) m;
 	is(flushed_cnt, 1, "1 flush after test_several_messages");
-	printf("\n*** Test forced flush ***\n");
+	note("*** Test forced flush ***");
 	flushed_cnt = 0;
 	static struct cmsg_hop test_forced_flush_route =
 		{ do_forced_flush, NULL };
@@ -160,7 +160,7 @@ test_several_messages(struct cmsg *m)
 {
 	(void) m;
 	is(flushed_cnt, 1, "1 flush after test_single_msg");
-	printf("\n*** Test several messages ***\n");
+	note("*** Test several messages ***");
 	flushed_cnt = 0;
 	static struct cmsg_hop test_event_route[] = {
 		{ do_some_event, &pipe_to_main },
@@ -190,7 +190,7 @@ test_several_messages(struct cmsg *m)
 static void
 test_single_msg()
 {
-	printf("\n*** Test single message ***\n");
+	note("*** Test single message ***");
 	static struct cmsg_hop test_single_flush_route[] = {
 		{ do_nothing, &pipe_to_main },
 		/* Schedule the next test. */
@@ -231,13 +231,13 @@ main()
 	memory_init();
 	fiber_init(fiber_c_invoke);
 	cbus_init();
-	printf("start main fiber\n");
+	note("start main fiber");
 	struct fiber *main_fiber = fiber_new("main", main_f);
 	assert(main_fiber != NULL);
 	fiber_wakeup(main_fiber);
-	printf("start main loop\n");
+	note("start main loop");
 	ev_run(loop(), 0);
-	printf("finish main loop\n");
+	note("finish main loop");
 	cbus_free();
 	fiber_free();
 	memory_free();
