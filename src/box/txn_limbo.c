@@ -198,7 +198,7 @@ txn_limbo_ack(struct txn_limbo *limbo, uint32_t replica_id, int64_t lsn)
 	assert(limbo->instance_id != REPLICA_ID_NIL);
 	int64_t prev_lsn = vclock_get(&limbo->vclock, replica_id);
 	vclock_follow(&limbo->vclock, replica_id, lsn);
-	struct txn_limbo_entry *e, *tmp;
+	struct txn_limbo_entry *e;
 	struct txn_limbo_entry *last_quorum = NULL;
 	rlist_foreach_entry(e, &limbo->queue, in_queue) {
 		if (e->lsn <= prev_lsn)
@@ -220,8 +220,7 @@ txn_limbo_ack(struct txn_limbo *limbo, uint32_t replica_id, int64_t lsn)
 		 * Wakeup all the entries in direct order as soon
 		 * as confirmation message is written to WAL.
 		 */
-		rlist_foreach_entry_safe(e, &limbo->queue, in_queue, tmp) {
-			rlist_del_entry(e, in_queue);
+		rlist_foreach_entry(e, &limbo->queue, in_queue) {
 			fiber_wakeup(e->txn->fiber);
 			if (e == last_quorum)
 				break;
