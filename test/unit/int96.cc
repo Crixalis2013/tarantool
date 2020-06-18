@@ -2,12 +2,13 @@
 
 #include "unit.h"
 
-#define check(expr) if (!(expr)) printf("failed at %s:%d\n", __FILE__, __LINE__)
+#define check(expr) fail_if(expr)
 
 static void
 test()
 {
 	header();
+	plan(0);
 
 	const uint64_t a = 0xFFFFFFFFFFFFFFFFull / 2;
 	int96_num num, num1, num2;
@@ -61,6 +62,7 @@ test()
 		check(int96_extract_neg_int64(&num) == int64_t(-a));
 	}
 
+	check_plan();
 	footer();
 }
 
