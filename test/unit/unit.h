@@ -74,7 +74,7 @@ void _space(FILE *stream);
 	fprintf(stream, __VA_ARGS__); fprintf(stream, "\n"); })
 
 #define note(...) msg(stdout, __VA_ARGS__)
-#define diag(...) msg(stderr, __VA_ARGS__)
+#define diag(...) { msg(stderr, __VA_ARGS__); fail_if(1); }
 
 /**
 @brief set and print plan
