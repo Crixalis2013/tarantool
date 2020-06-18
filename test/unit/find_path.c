@@ -11,6 +11,8 @@ int
 main(int argc, char *argv[])
 {
 	header();
+	plan(0);
 	fail_unless(open(find_path(argv[0]), O_RDONLY) >= 0);
+	check_plan();
 	footer();
 }
