@@ -30,7 +30,7 @@ test_scramble()
 
 	scramble_prepare(scramble, salt, password, strlen(password));
 
-	printf("%d\n", scramble_check(scramble, salt, hash2));
+	fail_if(scramble_check(scramble, salt, hash2) != 0);
 
 	int remote_salt[SCRAMBLE_SIZE/sizeof(int)];
 	for(size_t i = 0; i < sizeof(salt)/sizeof(int); ++i)
@@ -40,16 +40,16 @@ test_scramble()
 
 	scramble_reencode(new_scramble, scramble, salt, remote_salt, hash2);
 
-	printf("%d\n", scramble_check(new_scramble, remote_salt, hash2));
+	fail_if(scramble_check(new_scramble, remote_salt, hash2) != 0);
 
 	password = "wrongpass";
 	scramble_prepare(scramble, salt, password, strlen(password));
 
-	printf("%d\n", scramble_check(scramble, salt, hash2) != 0);
+	fail_if(scramble_check(scramble, salt, hash2) == 0);
 
 	scramble_prepare(scramble, salt, password, 0);
 
-	printf("%d\n", scramble_check(scramble, salt, hash2) != 0);
+	fail_if(scramble_check(scramble, salt, hash2) == 0);
 }
 
 void
@@ -68,8 +68,10 @@ int main()
 {
 	random_init();
 
+	plan(0);
 	test_scramble();
 	test_password_prepare();
+	check_plan();
 
 	return 0;
 }
