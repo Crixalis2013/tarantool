@@ -61,7 +61,9 @@ lcg_compat_check()
 int
 main(void)
 {
+	plan(0);
 	correctness_check();
 	lcg_compat_check();
 	sameresult_check();
+	check_plan();
 }
