@@ -246,6 +246,7 @@ memtx_space_replace_all_keys(struct space *space, struct tuple *old_tuple,
 	struct memtx_engine *memtx = (struct memtx_engine *)space->engine;
 	struct txn *txn = in_txn();
 	struct txn_stmt *stmt = txn_current_stmt(txn);
+
 	/*
 	 * Ensure we have enough slack memory to guarantee
 	 * successful statement-level rollback.
@@ -254,6 +255,9 @@ memtx_space_replace_all_keys(struct space *space, struct tuple *old_tuple,
 				       RESERVE_EXTENTS_BEFORE_REPLACE :
 				       RESERVE_EXTENTS_BEFORE_DELETE) != 0)
 		return -1;
+
+	if (old_tuple != NULL || mode == DUP_INSERT)
+		stmt->preserve_old_tuple = true;
 
 	/* Update the primary key */
 	struct index *pk = index_find(space, 0);
@@ -291,17 +295,9 @@ memtx_space_replace_all_keys(struct space *space, struct tuple *old_tuple,
 		tx_track(new_tuple, stmt, true);
 	if (*txn_stmt_history_pred(stmt, 0) != NULL)
 		tx_track(*txn_stmt_history_pred(stmt, 0), stmt, false);
-	else if (old_tuple != NULL)
-		tx_track(old_tuple, stmt, false);
-	if (new_tuple != NULL) {
-		for (i = 0; i < space->index_count; i++) {
-			struct tuple **pred = txn_stmt_history_pred(stmt, i);
-			if (*pred == NULL)
-				continue;
-			assert(i == 0 || tuple_is_dirty(*pred));
-			tx_track_succ(*pred, new_tuple, i);
-		}
-	}
+
+	if (new_tuple != NULL)
+		tx_history_link(stmt);
 
 	memtx_space_update_bsize(space, old_tuple, new_tuple);
 	if (new_tuple != NULL)
@@ -371,6 +367,9 @@ memtx_space_execute_delete(struct space *space, struct txn *txn,
 	struct tuple *old_tuple;
 	if (index_get(pk, key, part_count, &old_tuple) != 0)
 		return -1;
+
+	stmt->preserve_old_tuple = true;
+
 	if (old_tuple != NULL &&
 	    memtx_space->replace(space, old_tuple, NULL,
 				 DUP_REPLACE_OR_INSERT, &stmt->old_tuple) != 0)
@@ -525,6 +524,9 @@ memtx_space_execute_upsert(struct space *space, struct txn *txn,
 			stmt->new_tuple = NULL;
 		}
 	}
+
+	stmt->preserve_old_tuple = true;
+
 	/*
 	 * It's OK to use DUP_REPLACE_OR_INSERT: we don't risk
 	 * inserting a new tuple if the old one exists, since

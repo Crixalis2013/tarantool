@@ -144,7 +144,7 @@ static struct txn_stmt *
 txn_stmt_new(struct region *region, struct space *space)
 {
 	size_t history_size = space == NULL ? 0 :
-			      3 * space->index_count * sizeof(struct tuple *);
+			      2 * space->index_count * sizeof(struct tuple *);
 	size_t stmt_size = sizeof(struct txn_stmt) + history_size;
 	struct txn_stmt *stmt = (struct txn_stmt *)
 		region_aligned_alloc(region, stmt_size,
@@ -162,6 +162,7 @@ txn_stmt_new(struct region *region, struct space *space)
 	stmt->engine_savepoint = NULL;
 	stmt->row = NULL;
 	stmt->has_triggers = false;
+	stmt->preserve_old_tuple = false;
 	stmt->index_count = space == NULL ? 0 : space->index_count;
 	memset(stmt->history, 0, history_size);
 	return stmt;
@@ -181,7 +182,7 @@ txn_stmt_destroy(struct txn_stmt *stmt)
 		tuple_unref(stmt->old_tuple);
 	if (stmt->new_tuple != NULL)
 		tuple_unref(stmt->new_tuple);
-	for (size_t i = 0; i < 3 * stmt->index_count; i++)
+	for (size_t i = 0; i < 2 * stmt->index_count; i++)
 		if (stmt->history[i] != NULL)
 			tuple_unref(stmt->history[i]);
 }
@@ -203,16 +204,6 @@ txn_rollback_one_stmt(struct txn *txn, struct txn_stmt *stmt)
 {
 	if (txn->engine != NULL && stmt->space != NULL)
 		engine_rollback_statement(txn->engine, txn, stmt);
-	for (size_t i = 0; i < stmt->index_count; i++) {
-		if (*txn_stmt_history_succ(stmt, i) != NULL) {
-			struct tx_value *value =
-				tx_value_get(*txn_stmt_history_succ(stmt, i));
-			assert(value != NULL);
-			assert(value->add_stmt != NULL);
-			*txn_stmt_history_pred(value->add_stmt, i) =
-				*txn_stmt_history_pred(stmt, i);
-		}
-	}
 
 	if (stmt->has_triggers)
 		txn_run_rollback_triggers(txn, &stmt->on_rollback);
@@ -454,6 +445,7 @@ txn_commit_stmt(struct txn *txn, struct request *request)
 	 */
 	if (stmt->space != NULL && !rlist_empty(&stmt->space->on_replace) &&
 	    stmt->space->run_triggers && (stmt->old_tuple || stmt->new_tuple)) {
+		stmt->preserve_old_tuple = true;
 		int rc = 0;
 		if(!space_is_temporary(stmt->space)) {
 			rc = trigger_run(&stmt->space->on_replace, txn);
@@ -650,22 +642,11 @@ txn_prepare(struct txn *txn)
 		diag_set(ClientError, ER_FOREIGN_KEY_CONSTRAINT);
 		return -1;
 	}
-	/*
-	 * Move changes of the transaction back to the past in order to link
-	 * them with at least prepared transactions.
-	 */
-	struct txn_stmt *stmt;
-	stailq_foreach_entry(stmt, &txn->stmts, next) {
-		for (uint32_t i = 0; i < stmt->index_count; i++) {
-			if (*txn_stmt_history_succ(stmt, i) != NULL) {
-				struct tx_value *value =
-					tx_value_get(*txn_stmt_history_succ(stmt, i));
-				assert(value != NULL);
-				assert(value->add_stmt != NULL);
-				*txn_stmt_history_pred(value->add_stmt, i) =
-					*txn_stmt_history_pred(stmt, i);
-			}
-		}
+
+	if (txn->status == TXN_CONFLITED) {
+		diag_set(ClientError, ER_TRANSACTION_CONFLICT);
+		diag_log();
+		return -1;
 	}
 
 	/*
@@ -679,12 +660,6 @@ txn_prepare(struct txn *txn)
 	trigger_clear(&txn->fiber_on_stop);
 	if (!txn_has_flag(txn, TXN_CAN_YIELD))
 		trigger_clear(&txn->fiber_on_yield);
-
-	if (txn->status == TXN_CONFLITED) {
-		diag_set(ClientError, ER_TRANSACTION_CONFLICT);
-		diag_log();
-		return -1;
-	}
 
 	assert(txn->status == TXN_INPROGRESS);
 	struct tx_conflict_tracker *tr;
@@ -1367,10 +1342,45 @@ tx_track_succ_slow(struct tuple *pred, struct tuple *succ, size_t index)
 	assert(tuple_is_dirty(succ));
 	struct tx_value *value = tx_value_get(pred);
 	assert(value != NULL);
-	if (value->del_stmt != NULL)
-		*txn_stmt_history_del_succ(value->del_stmt, index) = succ;
-	else
-		*txn_stmt_history_succ(value->add_stmt, index) = succ;
+	*txn_stmt_history_succ(value->add_stmt, index) = succ;
 	tuple_ref(succ);
 }
 
+void
+tx_history_link(struct txn_stmt *stmt)
+{
+	assert(stmt->new_tuple != NULL);
+	for (size_t i = 0; i < stmt->index_count; i++) {
+		struct tuple **pred = txn_stmt_history_pred(stmt, i);
+		if (*pred == NULL || !tuple_is_dirty(*pred))
+			continue;
+		struct tx_value *value = tx_value_get(*pred);
+		assert(value != NULL);
+		assert(value->add_stmt != NULL);
+		*txn_stmt_history_succ(value->add_stmt, i) = stmt->new_tuple;
+	}
+}
+
+void tx_history_unlink(struct txn_stmt *stmt)
+{
+	assert(stmt->new_tuple != NULL);
+	for (size_t i = 0; i < stmt->index_count; i++) {
+		struct tuple **succ = txn_stmt_history_pred(stmt, i);
+		struct tuple **pred = txn_stmt_history_pred(stmt, i);
+
+		if (*succ != NULL) {
+			assert(tuple_is_dirty(*succ));
+			struct tx_value *value = tx_value_get(*succ);
+			assert(value->add_stmt != NULL);
+			*txn_stmt_history_pred(value->add_stmt, i) =
+				*txn_stmt_history_pred(stmt, i);
+		}
+
+		if (*pred != NULL && tuple_is_dirty(*pred)) {
+			struct tx_value *value = tx_value_get(*pred);
+			assert(value->add_stmt != NULL);
+			*txn_stmt_history_succ(value->add_stmt, i) =
+				*txn_stmt_history_succ(stmt, i);
+		}
+	}
+}

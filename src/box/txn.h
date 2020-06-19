@@ -127,6 +127,8 @@ struct txn_stmt {
 	struct xrow_header *row;
 	/** on_commit and/or on_rollback list is not empty. */
 	bool has_triggers;
+	/** old_tuple is required to be exactly old_tuple. */
+	bool preserve_old_tuple;
 	/** Commit/rollback triggers associated with this statement. */
 	struct rlist on_commit;
 	struct rlist on_rollback;
@@ -151,15 +153,6 @@ txn_stmt_history_succ(struct txn_stmt *stmt, size_t index) {
 		return &null;
 	}
 	return &stmt->history[index + stmt->index_count];
-}
-
-static inline struct tuple **
-txn_stmt_history_del_succ(struct txn_stmt *stmt, size_t index) {
-	if (index >= stmt->index_count) {
-		static __thread struct tuple *null = NULL;
-		return &null;
-	}
-	return &stmt->history[index + 2 * stmt->index_count];
 }
 
 /**
@@ -707,6 +700,22 @@ tx_track_succ(struct tuple *pred, struct tuple *succ, size_t index)
 		return;
 	return tx_track_succ_slow(pred, succ, index);
 }
+
+/**
+ * new tuple in the statement must be non-null/.
+ * @param stmt
+ * @return
+ */
+void
+tx_history_link(struct txn_stmt *stmt);
+
+/**
+ * new tuple in the statement must be non-null/.
+ * @param stmt
+ * @return
+ */
+void
+tx_history_unlink(struct txn_stmt *stmt);
 
 int
 tx_cause_conflict(struct txn *wreaker, struct txn *victim);
