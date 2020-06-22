@@ -43,6 +43,7 @@ struct tx_value
 	struct txn_stmt *add_stmt;
 	struct txn_stmt *del_stmt;
 	struct rlist reader_list;
+	struct rlist delete_stmt_list;
 };
 
 static uint32_t
@@ -164,6 +165,7 @@ txn_stmt_new(struct region *region, struct space *space)
 	stmt->has_triggers = false;
 	stmt->preserve_old_tuple = false;
 	stmt->index_count = space == NULL ? 0 : space->index_count;
+	rlist_create(&stmt->in_value_delete);
 	memset(stmt->history, 0, history_size);
 	return stmt;
 }
@@ -1188,6 +1190,7 @@ tx_value_new(struct tuple *tuple)
 	value->add_stmt = NULL;
 	value->del_stmt = NULL;
 	rlist_create(&value->reader_list);
+	rlist_create(&value->delete_stmt_list);
 	return value;
 }
 
@@ -1309,8 +1312,7 @@ tx_track(struct tuple *tuple, struct txn_stmt *stmt, bool add_or_del)
 		assert(value->add_stmt == NULL);
 		value->add_stmt = stmt;
 	} else {
-		assert(value->del_stmt == NULL);
-		value->del_stmt = stmt;
+		rlist_add(&value->delete_stmt_list, &stmt->in_value_delete);
 	}
 
 	return 0;
@@ -1361,7 +1363,8 @@ tx_history_link(struct txn_stmt *stmt)
 	}
 }
 
-void tx_history_unlink(struct txn_stmt *stmt)
+void
+tx_history_unlink(struct txn_stmt *stmt)
 {
 	assert(stmt->new_tuple != NULL);
 	for (size_t i = 0; i < stmt->index_count; i++) {
@@ -1382,5 +1385,34 @@ void tx_history_unlink(struct txn_stmt *stmt)
 			*txn_stmt_history_succ(value->add_stmt, i) =
 				*txn_stmt_history_succ(stmt, i);
 		}
+	}
+}
+
+int
+tx_history_prepare(struct txn_stmt *stmt)
+{
+	if (stmt->new_tuple == NULL) {
+		assert(stmt->old_tuple != NULL);
+		assert(tuple_is_dirty(stmt->old_tuple));
+		struct tx_value *value = tx_value_get(stmt->old_tuple);
+		assert(value->del_stmt == stmt);
+		if (value->add_stmt == NULL)
+			return 0;
+		if (value->add_stmt->txn_owner->status == TXN_PREPARED ||
+		    value->add_stmt->txn_owner->status == TXN_COMMITTED)
+			return 0;
+		struct tuple **succ = txn_stmt_history_pred(stmt, i);
+
+
+			struct tuple **pred = txn_stmt_history_pred(stmt, 0);
+		while (true) {
+			if (*pred == NULL) {
+				diag_set(ClientError, ER_TRANSACTION_CONFLICT);
+				return -1;
+			}
+			if (
+		}
+
+	} else {
 	}
 }

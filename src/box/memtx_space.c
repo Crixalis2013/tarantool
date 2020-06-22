@@ -368,6 +368,10 @@ memtx_space_execute_delete(struct space *space, struct txn *txn,
 	if (index_get(pk, key, part_count, &old_tuple) != 0)
 		return -1;
 
+	/**
+	 * We have to delete exactly old_tuple just because we return it as
+	 * a result
+	 */
 	stmt->preserve_old_tuple = true;
 
 	if (old_tuple != NULL &&

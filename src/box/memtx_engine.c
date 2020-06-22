@@ -409,8 +409,8 @@ memtx_engine_rollback_statement(struct engine *engine, struct txn *txn,
 	}
 	tx_history_unlink(stmt);
 
-	if (*txn_stmt_history_pred(stmt, 0) != NULL)
-		tx_untrack(*txn_stmt_history_pred(stmt, 0), stmt, false);
+	if (stmt->old_tuple != NULL)
+		tx_untrack(stmt->old_tuple, stmt, false);
 
 	if (stmt->new_tuple != NULL)
 		tx_untrack(stmt->new_tuple, stmt, true);
