@@ -1,12 +1,24 @@
 std = "luajit"
-globals = {"box", "_TARANTOOL"}
+globals = {"box", "_TARANTOOL", "tonumber64"}
 ignore = {
+    -- Accessing an undefined field of a global variable <debug>.
+    "143/debug",
+    -- Accessing an undefined field of a global variable <string>.
+    "143/string",
+    -- Accessing an undefined field of a global variable <table>.
+    "143/table",
     -- Unused argument <self>.
     "212/self",
     -- Redefining a local variable.
     "411",
+    -- Redefining an argument.
+    "412",
+    -- Shadowing a local variable.
+    "421",
     -- Shadowing an upvalue.
     "431",
+    -- Shadowing an upvalue argument.
+    "432",
 }
 
 include_files = {
@@ -16,7 +28,7 @@ include_files = {
 
 exclude_files = {
     "build/**/*.lua",
-    "src/**/*.lua",
+    "src/box/**/*.lua",
     "test-run/**/*.lua",
     "test/**/*.lua",
     "third_party/**/*.lua",
@@ -37,10 +49,10 @@ files["src/lua/help.lua"] = {
 files["src/lua/init.lua"] = {
     -- Miscellaneous global function definition.
     globals = {"dostring"},
+}
+files["src/box/lua/console.lua"] = {
     ignore = {
-        -- Set tarantool specific behaviour for os.exit.
-        "122/os",
-        -- Add custom functions into Lua package namespace.
-        "142/package",
-    },
+        -- https://github.com/tarantool/tarantool/issues/5032
+        "212",
+    }
 }

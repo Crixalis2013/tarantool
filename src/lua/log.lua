@@ -318,7 +318,7 @@ local function set_log_level(level, update_box_cfg)
 end
 
 -- Tries to set a new level, or print an error.
-local function log_level(level, update_box_cfg)
+local function log_level(level)
     local ok, msg = verify_option('level', level)
     if not ok then
         error(msg)
@@ -438,7 +438,7 @@ local function reload_cfg(cfg)
 end
 
 -- Load or reload configuration via log.cfg({}) call.
-local function load_cfg(oldcfg, cfg)
+local function load_cfg(oldcf, cfg) -- luacheck: no unused args
     cfg = cfg or {}
 
     -- log option might be zero length string, which
