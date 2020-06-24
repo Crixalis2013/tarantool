@@ -123,12 +123,13 @@ MINOR_VERSION=$(word 2,$(subst ., ,$(GIT_DESCRIBE)))
 BUCKET="$(MAJOR_VERSION).$(MINOR_VERSION)"
 
 deploy_prepare: git_submodule_update
-	[ -d packpack ] || \
-		git clone https://github.com/packpack/packpack.git packpack
+	rm -rf packpack_avtikhon
+	git clone https://github.com/avtikhon/packpack.git packpack_avtikhon
+	( cd packpack_avtikhon && git checkout master && git branch -D avtikhon/gh-4562-add-suse-zipper-spec ; git checkout avtikhon/gh-4562-add-suse-zipper-spec )
 	rm -rf build
 
 package: deploy_prepare
-	PACKPACK_EXTRA_DOCKER_RUN_PARAMS='--network=host' ./packpack/packpack
+	PACKPACK_EXTRA_DOCKER_RUN_PARAMS='--network=host' ./packpack_avtikhon/packpack
 
 deploy: package
 	echo ${GPG_SECRET_KEY} | base64 -d | gpg --batch --import || true
@@ -140,7 +141,7 @@ deploy: package
 	fi
 
 source: deploy_prepare
-	TARBALL_COMPRESSOR=gz packpack/packpack tarball
+	TARBALL_COMPRESSOR=gz packpack_avtikhon/packpack tarball
 
 source_deploy: source
 	aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 cp build/*.tar.gz \
