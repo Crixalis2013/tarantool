@@ -153,7 +153,7 @@ test:do_catchsql_test(
         SELECT b FROM t2 WHERE a IN ('', '0.0.0', '2') 
     ]], {
         -- <in4-2.8>
-        1, "Type mismatch: can not convert integer to text"
+        1, "Type mismatch: can not convert '' (type: text) to integer"
         -- </in4-2.8>
     })
 

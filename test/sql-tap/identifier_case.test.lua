@@ -242,11 +242,11 @@ data = {
     { 2,  [[ 'a' < 'b' collate "binary" ]], {0, {true}}},
     { 3,  [[ 'a' < 'b' collate 'binary' ]], {1, [[Syntax error at line 1 near ''binary'']]}},
     { 4,  [[ 'a' < 'b' collate "unicode" ]], {0, {true}}},
-    { 5,  [[ 5 < 'b' collate "unicode" ]], {1, "Type mismatch: can not convert b to numeric"}},
+    { 5,  [[ 5 < 'b' collate "unicode" ]], {1, "Type mismatch: can not convert 'b' (type: text) to numeric"}},
     { 6,  [[ 5 < 'b' collate unicode ]], {1,"Collation 'UNICODE' does not exist"}},
-    { 7,  [[ 5 < 'b' collate "unicode_ci" ]], {1, "Type mismatch: can not convert b to numeric"}},
+    { 7,  [[ 5 < 'b' collate "unicode_ci" ]], {1, "Type mismatch: can not convert 'b' (type: text) to numeric"}},
     { 8,  [[ 5 < 'b' collate NONE ]], {1, "Collation 'NONE' does not exist"}},
-    { 9,  [[ 5 < 'b' collate "none" ]], {1, "Type mismatch: can not convert b to numeric"}},
+    { 9,  [[ 5 < 'b' collate "none" ]], {1, "Type mismatch: can not convert 'b' (type: text) to numeric"}},
 }
 
 for _, row in ipairs(data) do

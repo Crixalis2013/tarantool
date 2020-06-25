@@ -290,7 +290,7 @@ test:do_catchsql_test(
         SELECT a IN (10.0, 20) FROM t3;
     ]], {
         -- <subquery-2.3.2>
-        1, "Type mismatch: can not convert text to real"
+        1, "Type mismatch: can not convert '10' (type: text) to real"
         -- </subquery-2.3.2>
     })
 
