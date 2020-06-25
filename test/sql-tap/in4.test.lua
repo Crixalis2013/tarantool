@@ -147,12 +147,13 @@ test:do_execsql_test(
         -- </in4-2.7>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "in4-2.8",
     [[
         SELECT b FROM t2 WHERE a IN ('', '0.0.0', '2') 
     ]], {
         -- <in4-2.8>
+        1, "Type mismatch: can not convert integer to text"
         -- </in4-2.8>
     })
 

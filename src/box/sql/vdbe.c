@@ -558,6 +558,50 @@ mem_convert_to_numeric(struct Mem *mem, enum field_type type, bool is_precise)
 	return mem_convert_to_integer(mem, is_precise);
 }
 
+/**
+ * Check that MEM types of mems are compatible with the
+ * corresponding types from key_def.
+ *
+ * If mem and type are comparable but incompatible according to
+ * field_mp_plain_type_is_compatible() and the comparison
+ * operation is EQ, we can say that the result of the comparison
+ * will be FALSE. This allows us to compare DOUBLE and INTEGER
+ * values.
+ *
+ * @param mems The first mem of the array.
+ * @param def key_def that contains types to check.
+ * @param size Size of the array.
+ * @param is_op_eq TRUE is comparison operator is EQ.
+ * @param[out] is_not_converted TRUE if operation is EQ and mem
+                                and type are comparable but not
+                                compatible. FALSE otherwise.
+ * @retval TRUE if the MEM types and types from key_def are
+ *         comparable, FALSE otherwise.
+ */
+static bool
+mem_are_types_comparable(struct Mem *mems, struct key_def *def, uint32_t size,
+			 bool is_op_eq, bool *is_not_converted) {
+	assert(!is_op_eq || !*is_not_converted);
+	for (uint32_t i = 0; i < size; ++i) {
+		enum field_type type = def->parts[i].type;
+		struct Mem *mem = &mems[i];
+		if (mem_is_type_compatible(mem, type))
+			continue;
+		if (mem_convert_to_numeric(mem, type, true) == 0)
+			continue;
+		if (sql_type_is_numeric(type) &&
+		    (mem->flags & (MEM_Int | MEM_UInt | MEM_Real)) != 0) {
+			if (is_op_eq)
+				*is_not_converted = true;
+			continue;
+		}
+		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+			field_type_strs[type], mem_type_to_str(mem));
+		return false;
+	}
+	return true;
+}
+
 /*
  * pMem currently only holds a string type (or maybe a BLOB that we can
  * interpret as a string if we want to).  Compute its corresponding
@@ -2286,8 +2330,6 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 	pIn3 = &aMem[pOp->p3];
 	flags1 = pIn1->flags;
 	flags3 = pIn3->flags;
-	enum field_type ft_p1 = pIn1->field_type;
-	enum field_type ft_p3 = pIn3->field_type;
 	if ((flags1 | flags3)&MEM_Null) {
 		/* One or both operands are NULL */
 		if (pOp->p5 & SQL_NULLEQ) {
@@ -2346,22 +2388,17 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 	} else {
 		enum field_type type = pOp->p5 & FIELD_TYPE_MASK;
 		if (sql_type_is_numeric(type)) {
-			if ((flags1 | flags3)&MEM_Str) {
-				if ((flags1 & MEM_Str) == MEM_Str) {
-					mem_apply_numeric_type(pIn1);
-					testcase( flags3!=pIn3->flags); /* Possible if pIn1==pIn3 */
-					flags3 = pIn3->flags;
-				}
-				if ((flags3 & MEM_Str) == MEM_Str) {
-					if (mem_apply_numeric_type(pIn3) != 0) {
-						diag_set(ClientError,
-							 ER_SQL_TYPE_MISMATCH,
-							 sql_value_to_diag_str(pIn3),
-							 "numeric");
-						goto abort_due_to_error;
-					}
-
-				}
+			if ((flags1 & MEM_Str) == MEM_Str) {
+				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+					 sql_value_to_diag_str(pIn1),
+					 "numeric");
+				goto abort_due_to_error;
+			}
+			if ((flags3 & MEM_Str) == MEM_Str) {
+				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+					 sql_value_to_diag_str(pIn3),
+					 "numeric");
+				goto abort_due_to_error;
 			}
 			/* Handle the common case of integer comparison here, as an
 			 * optimization, to avoid a call to sqlMemCompare()
@@ -2394,22 +2431,17 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 				goto compare_op;
 			}
 		} else if (type == FIELD_TYPE_STRING) {
-			if ((flags1 & MEM_Str) == 0 &&
-			    (flags1 & (MEM_Int | MEM_UInt | MEM_Real)) != 0) {
-				testcase( pIn1->flags & MEM_Int);
-				testcase( pIn1->flags & MEM_Real);
-				sqlVdbeMemStringify(pIn1);
-				testcase( (flags1&MEM_Dyn) != (pIn1->flags&MEM_Dyn));
-				flags1 = (pIn1->flags & ~MEM_TypeMask) | (flags1 & MEM_TypeMask);
-				assert(pIn1!=pIn3);
+			if ((flags1 & MEM_Str) == 0) {
+				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+					 mem_type_to_str(pIn3),
+					 mem_type_to_str(pIn1));
+				goto abort_due_to_error;
 			}
-			if ((flags3 & MEM_Str) == 0 &&
-			    (flags3 & (MEM_Int | MEM_UInt | MEM_Real)) != 0) {
-				testcase( pIn3->flags & MEM_Int);
-				testcase( pIn3->flags & MEM_Real);
-				sqlVdbeMemStringify(pIn3);
-				testcase( (flags3&MEM_Dyn) != (pIn3->flags&MEM_Dyn));
-				flags3 = (pIn3->flags & ~MEM_TypeMask) | (flags3 & MEM_TypeMask);
+			if ((flags3 & MEM_Str) == 0) {
+				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+					 mem_type_to_str(pIn1),
+					 mem_type_to_str(pIn3));
+				goto abort_due_to_error;
 			}
 		}
 		assert(pOp->p4type==P4_COLLSEQ || pOp->p4.pColl==0);
@@ -2424,14 +2456,6 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 	case OP_Gt:    res2 = res>0;      break;
 	default:       res2 = res>=0;     break;
 	}
-
-	/* Undo any changes made by mem_apply_type() to the input registers. */
-	assert((pIn1->flags & MEM_Dyn) == (flags1 & MEM_Dyn));
-	pIn1->flags = flags1;
-	pIn1->field_type = ft_p1;
-	assert((pIn3->flags & MEM_Dyn) == (flags3 & MEM_Dyn));
-	pIn3->flags = flags3;
-	pIn3->field_type = ft_p3;
 
 	if (pOp->p5 & SQL_STOREP2) {
 		iCompare = res;
@@ -3530,8 +3554,6 @@ case OP_SeekGT: {       /* jump, in3 */
 		pIn3 = &aMem[int_field];
 		if ((pIn3->flags & MEM_Null) != 0)
 			goto skip_truncate;
-		if ((pIn3->flags & MEM_Str) != 0)
-			mem_apply_numeric_type(pIn3);
 		int64_t i;
 		if ((pIn3->flags & MEM_Int) == MEM_Int) {
 			i = pIn3->u.i;
@@ -3623,7 +3645,20 @@ skip_truncate:
 	assert(oc!=OP_SeekGE || r.default_rc==+1);
 	assert(oc!=OP_SeekLT || r.default_rc==+1);
 
+	/*
+	 * Make sure that the types of all the fields in the tuple
+	 * that will be used in the iterator match the field types
+	 * of the space.
+	 */
 	r.aMem = &aMem[pOp->p3];
+	bool is_not_found = false;
+	if (!mem_are_types_comparable(r.aMem, r.key_def, r.nField, eqOnly == 1,
+				      &is_not_found))
+		goto abort_due_to_error;
+	if (is_not_found) {
+		res = 1;
+		goto seek_not_found;
+	}
 #ifdef SQL_DEBUG
 	{ int i; for(i=0; i<r.nField; i++) assert(memIsValid(&r.aMem[i])); }
 #endif
@@ -4750,7 +4785,16 @@ case OP_IdxGE:  {       /* jump */
 		assert(pOp->opcode==OP_IdxGE || pOp->opcode==OP_IdxLT);
 		r.default_rc = 0;
 	}
+
+	/*
+	 * Make sure that the types of mems are comparable with
+	 * the field types of the space.
+	 */
 	r.aMem = &aMem[pOp->p3];
+	bool unused = false;
+	if (!mem_are_types_comparable(r.aMem, r.key_def, r.nField, false,
+				      &unused))
+		goto abort_due_to_error;
 #ifdef SQL_DEBUG
 	{ int i; for(i=0; i<r.nField; i++) assert(memIsValid(&r.aMem[i])); }
 #endif

@@ -1028,22 +1028,23 @@ test:do_test(
         -- </join-11.8>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "join-11.9",
     [[
         SELECT * FROM t1 NATURAL JOIN t2 
     ]], {
         -- <join-11.9>
+        1, "Type mismatch: can not convert integer to text"
         -- </join-11.9>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "join-11.10",
     [[
         SELECT * FROM t2 NATURAL JOIN t1 
     ]], {
         -- <join-11.10>
-        1, "one", 2, "two"
+        1, "Type mismatch: can not convert 1 to numeric"
         -- </join-11.10>
     })
 
