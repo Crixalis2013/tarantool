@@ -637,12 +637,12 @@ test:do_test(
     "in-11.2",
     function()
         -- The '2' should be coerced into 2 because t6.b is NUMERIC
-        return test:execsql [[
+        return test:catchsql [[
             SELECT * FROM t6 WHERE b IN ('2');
         ]]
     end, {
         -- <in-11.2>
-        1, 2
+        1, "Type mismatch: can not convert 2 to numeric"
         -- </in-11.2>
     })
 

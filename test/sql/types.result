@@ -339,12 +339,12 @@ box.execute("INSERT INTO tboolean VALUES (TRUE);")
 box.execute("SELECT * FROM tboolean WHERE s1 = x'44';")
 ---
 - null
-- 'Type mismatch: can not convert varbinary to boolean'
+- 'Type mismatch: can not convert boolean to varbinary'
 ...
 box.execute("SELECT * FROM tboolean WHERE s1 = 'abc';")
 ---
 - null
-- 'Type mismatch: can not convert abc to boolean'
+- 'Type mismatch: can not convert boolean to text'
 ...
 box.execute("SELECT * FROM tboolean WHERE s1 = 1;")
 ---
@@ -602,14 +602,6 @@ box.execute("SELECT 18446744073709551615.0 > 18446744073709551615")
 ---
 - metadata:
   - name: 18446744073709551615.0 > 18446744073709551615
-    type: boolean
-  rows:
-  - [true]
-...
-box.execute("SELECT 18446744073709551615 IN ('18446744073709551615', 18446744073709551615.0)")
----
-- metadata:
-  - name: 18446744073709551615 IN ('18446744073709551615', 18446744073709551615.0)
     type: boolean
   rows:
   - [true]
@@ -2151,6 +2143,231 @@ box.execute([[SELECT * FROM "s" WHERE "id" = ?;]])
   - name: v
     type: string
   rows: []
+...
+--
+-- gh-4230: Make sure that there is no implicit cast between
+-- string and number.
+--
+box.execute([[SELECT '1' > 0;]]);
+---
+- null
+- 'Type mismatch: can not convert 1 to numeric'
+...
+box.execute([[SELECT 1 > '0';]]);
+---
+- null
+- 'Type mismatch: can not convert 0 to numeric'
+...
+box.execute([[CREATE TABLE t (i INT PRIMARY KEY, d DOUBLE, n NUMBER, s STRING);]])
+---
+- row_count: 1
+...
+box.execute([[INSERT INTO t VALUES (1, 1.0, 1, '2'), (2, 2.0, 2.0, '2');]])
+---
+- row_count: 2
+...
+box.execute([[SELECT * from t WHERE i > s;]])
+---
+- null
+- 'Type mismatch: can not convert 2 to numeric'
+...
+box.execute([[SELECT * from t WHERE s > i;]])
+---
+- null
+- 'Type mismatch: can not convert 2 to numeric'
+...
+box.execute([[SELECT * from t WHERE d > s;]])
+---
+- null
+- 'Type mismatch: can not convert 2 to numeric'
+...
+box.execute([[SELECT * from t WHERE s > d;]])
+---
+- null
+- 'Type mismatch: can not convert 2 to numeric'
+...
+box.execute([[SELECT * from t WHERE i = 1 and n > s;]])
+---
+- null
+- 'Type mismatch: can not convert 2 to numeric'
+...
+box.execute([[SELECT * from t WHERE i = 2 and s > n;]])
+---
+- null
+- 'Type mismatch: can not convert 2 to numeric'
+...
+box.execute([[SELECT i FROM t WHERE i in (1);]])
+---
+- metadata:
+  - name: I
+    type: integer
+  rows:
+  - [1]
+...
+box.execute([[SELECT i FROM t WHERE d in (1);]])
+---
+- metadata:
+  - name: I
+    type: integer
+  rows:
+  - [1]
+...
+box.execute([[SELECT i FROM t WHERE n in (1);]])
+---
+- metadata:
+  - name: I
+    type: integer
+  rows:
+  - [1]
+...
+box.execute([[SELECT i FROM t WHERE s in (1);]])
+---
+- null
+- 'Type mismatch: can not convert 2 to numeric'
+...
+box.execute([[SELECT i FROM t WHERE i in (1.0);]])
+---
+- metadata:
+  - name: I
+    type: integer
+  rows:
+  - [1]
+...
+box.execute([[SELECT i FROM t WHERE d in (1.0);]])
+---
+- metadata:
+  - name: I
+    type: integer
+  rows:
+  - [1]
+...
+box.execute([[SELECT i FROM t WHERE n in (1.0);]])
+---
+- metadata:
+  - name: I
+    type: integer
+  rows:
+  - [1]
+...
+box.execute([[SELECT i FROM t WHERE s in (1.0);]])
+---
+- null
+- 'Type mismatch: can not convert 2 to numeric'
+...
+box.execute([[SELECT i FROM t WHERE i in ('1');]])
+---
+- null
+- 'Type mismatch: can not convert integer to text'
+...
+box.execute([[SELECT i FROM t WHERE d in ('1');]])
+---
+- null
+- 'Type mismatch: can not convert 1 to numeric'
+...
+box.execute([[SELECT i FROM t WHERE n in ('1');]])
+---
+- null
+- 'Type mismatch: can not convert 1 to numeric'
+...
+box.execute([[SELECT i FROM t WHERE s in ('1');]])
+---
+- metadata:
+  - name: I
+    type: integer
+  rows: []
+...
+box.execute([[SELECT i FROM t WHERE i in ('1.0');]])
+---
+- null
+- 'Type mismatch: can not convert integer to text'
+...
+box.execute([[SELECT i FROM t WHERE d in ('1.0');]])
+---
+- null
+- 'Type mismatch: can not convert 1.0 to numeric'
+...
+box.execute([[SELECT i FROM t WHERE n in ('1.0');]])
+---
+- null
+- 'Type mismatch: can not convert 1.0 to numeric'
+...
+box.execute([[SELECT i FROM t WHERE s in ('1.0');]])
+---
+- metadata:
+  - name: I
+    type: integer
+  rows: []
+...
+box.execute([[DROP TABLE t;]])
+---
+- row_count: 1
+...
+-- Comparison with SCALAR.
+box.execute([[CREATE TABLE t(a SCALAR PRIMARY KEY);]])
+---
+- row_count: 1
+...
+box.execute([[INSERT INTO t VALUES (1), (2.2), ('3');]]);
+---
+- row_count: 3
+...
+box.execute([[SELECT a FROM t WHERE a > 1]]);
+---
+- null
+- 'Type mismatch: can not convert 3 to numeric'
+...
+box.execute([[SELECT a FROM t WHERE a > 1.0]]);
+---
+- null
+- 'Type mismatch: can not convert 3 to numeric'
+...
+box.execute([[SELECT a FROM t WHERE a > '1']]);
+---
+- metadata:
+  - name: A
+    type: scalar
+  rows:
+  - ['3']
+...
+box.execute([[SELECT a FROM t WHERE a < 1]]);
+---
+- null
+- 'Type mismatch: can not convert 3 to numeric'
+...
+box.execute([[SELECT a FROM t WHERE a < 1.0]]);
+---
+- null
+- 'Type mismatch: can not convert 3 to numeric'
+...
+box.execute([[SELECT a FROM t WHERE a < '1']]);
+---
+- metadata:
+  - name: A
+    type: scalar
+  rows:
+  - [1]
+  - [2.2]
+...
+box.execute([[SELECT a FROM t WHERE a = 1]]);
+---
+- null
+- 'Type mismatch: can not convert 3 to numeric'
+...
+box.execute([[SELECT a FROM t WHERE a = 1.0]]);
+---
+- null
+- 'Type mismatch: can not convert 3 to numeric'
+...
+box.execute([[SELECT a FROM t WHERE a = '1']]);
+---
+- metadata:
+  - name: A
+    type: scalar
+  rows: []
+...
+box.execute([[DROP TABLE t;]])
+---
+- row_count: 1
 ...
 s:drop()
 ---

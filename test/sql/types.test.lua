@@ -151,7 +151,6 @@ box.execute("SELECT 18446744073709551610 - 18446744073709551615;")
 box.execute("SELECT 18446744073709551615 = null;")
 box.execute("SELECT 18446744073709551615 = 18446744073709551615.0;")
 box.execute("SELECT 18446744073709551615.0 > 18446744073709551615")
-box.execute("SELECT 18446744073709551615 IN ('18446744073709551615', 18446744073709551615.0)")
 box.execute("SELECT 1 LIMIT 18446744073709551615;")
 box.execute("SELECT 1 LIMIT 1 OFFSET 18446744073709551614;")
 box.execute("SELECT CAST('18446744073' || '709551616' AS INTEGER);")
@@ -486,4 +485,56 @@ s:format({ \
 })
 
 box.execute([[SELECT * FROM "s" WHERE "id" = ?;]])
+
+--
+-- gh-4230: Make sure that there is no implicit cast between
+-- string and number.
+--
+box.execute([[SELECT '1' > 0;]]);
+box.execute([[SELECT 1 > '0';]]);
+box.execute([[CREATE TABLE t (i INT PRIMARY KEY, d DOUBLE, n NUMBER, s STRING);]])
+box.execute([[INSERT INTO t VALUES (1, 1.0, 1, '2'), (2, 2.0, 2.0, '2');]])
+box.execute([[SELECT * from t WHERE i > s;]])
+box.execute([[SELECT * from t WHERE s > i;]])
+box.execute([[SELECT * from t WHERE d > s;]])
+box.execute([[SELECT * from t WHERE s > d;]])
+box.execute([[SELECT * from t WHERE i = 1 and n > s;]])
+box.execute([[SELECT * from t WHERE i = 2 and s > n;]])
+
+box.execute([[SELECT i FROM t WHERE i in (1);]])
+box.execute([[SELECT i FROM t WHERE d in (1);]])
+box.execute([[SELECT i FROM t WHERE n in (1);]])
+box.execute([[SELECT i FROM t WHERE s in (1);]])
+
+box.execute([[SELECT i FROM t WHERE i in (1.0);]])
+box.execute([[SELECT i FROM t WHERE d in (1.0);]])
+box.execute([[SELECT i FROM t WHERE n in (1.0);]])
+box.execute([[SELECT i FROM t WHERE s in (1.0);]])
+
+box.execute([[SELECT i FROM t WHERE i in ('1');]])
+box.execute([[SELECT i FROM t WHERE d in ('1');]])
+box.execute([[SELECT i FROM t WHERE n in ('1');]])
+box.execute([[SELECT i FROM t WHERE s in ('1');]])
+
+box.execute([[SELECT i FROM t WHERE i in ('1.0');]])
+box.execute([[SELECT i FROM t WHERE d in ('1.0');]])
+box.execute([[SELECT i FROM t WHERE n in ('1.0');]])
+box.execute([[SELECT i FROM t WHERE s in ('1.0');]])
+
+box.execute([[DROP TABLE t;]])
+
+-- Comparison with SCALAR.
+box.execute([[CREATE TABLE t(a SCALAR PRIMARY KEY);]])
+box.execute([[INSERT INTO t VALUES (1), (2.2), ('3');]]);
+box.execute([[SELECT a FROM t WHERE a > 1]]);
+box.execute([[SELECT a FROM t WHERE a > 1.0]]);
+box.execute([[SELECT a FROM t WHERE a > '1']]);
+box.execute([[SELECT a FROM t WHERE a < 1]]);
+box.execute([[SELECT a FROM t WHERE a < 1.0]]);
+box.execute([[SELECT a FROM t WHERE a < '1']]);
+box.execute([[SELECT a FROM t WHERE a = 1]]);
+box.execute([[SELECT a FROM t WHERE a = 1.0]]);
+box.execute([[SELECT a FROM t WHERE a = '1']]);
+box.execute([[DROP TABLE t;]])
+
 s:drop()
