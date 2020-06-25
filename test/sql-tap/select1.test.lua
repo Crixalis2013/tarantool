@@ -1912,7 +1912,7 @@ test:do_execsql_test(
 test:do_execsql_test(
         "select1-12.7",
         [[
-            SELECT * FROM t3 WHERE a=(SELECT 1);
+            SELECT * FROM t3 WHERE a=(SELECT '1');
         ]], {
             -- <select1-12.7>
             0, "1", "2"
@@ -1922,7 +1922,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "select1-12.8",
     [[
-        SELECT * FROM t3 WHERE a=(SELECT 2);
+        SELECT * FROM t3 WHERE a=(SELECT '2');
     ]], {
         -- <select1-12.8>
 
