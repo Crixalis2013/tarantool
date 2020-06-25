@@ -642,7 +642,7 @@ test:do_test(
         ]]
     end, {
         -- <in-11.2>
-        1, "Type mismatch: can not convert 2 to numeric"
+        1, "Type mismatch: can not convert '2' (type: text) to numeric"
         -- </in-11.2>
     })
 
