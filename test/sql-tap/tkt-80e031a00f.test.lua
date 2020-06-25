@@ -346,7 +346,7 @@ test:do_catchsql_test(
         SELECT 'hello' IN t1
     ]], {
         -- <tkt-80e031a00f.27>
-        1, 'Type mismatch: can not convert hello to integer'
+        1, "Type mismatch: can not convert 'hello' (type: text) to integer"
         -- </tkt-80e031a00f.27>
     })
 
@@ -356,7 +356,7 @@ test:do_catchsql_test(
         SELECT 'hello' NOT IN t1
     ]], {
         -- <tkt-80e031a00f.28>
-        1, 'Type mismatch: can not convert hello to integer'
+        1, "Type mismatch: can not convert 'hello' (type: text) to integer"
         -- </tkt-80e031a00f.28>
     })
 

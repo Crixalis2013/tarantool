@@ -625,7 +625,7 @@ test:do_catchsql_test(
         SELECT '0'==0.0
     ]], {
         -- <misc1-12.2>
-        1, "Type mismatch: can not convert 0 to numeric"
+        1, "Type mismatch: can not convert '0' (type: text) to numeric"
         -- </misc1-12.2>
     })
 

@@ -1163,15 +1163,22 @@ sqlValueText(sql_value * pVal)
 	return valueToText(pVal);
 }
 
+enum {
+	DIAG_STR_LEN_MAX = 80,
+};
+
 const char *
 sql_value_to_diag_str(sql_value *value)
 {
-	if (sql_value_type(value) == MP_BIN) {
-		if (mem_has_msgpack_subtype(value))
-			return sqlValueText(value);
+	if (mem_mp_type(value) == MP_BIN)
 		return "varbinary";
-	}
-	return sqlValueText(value);
+	char *type = mem_type_to_str(value);
+	char *str = (char *)sqlValueText(value);
+	if (str == NULL)
+		return "NULL";
+	if (strlen(str) < DIAG_STR_LEN_MAX)
+		return tt_sprintf("'%s' (type: %s)", str, type);
+	return tt_sprintf("'%.80s...' (type: %s)", str, type);
 }
 
 /*

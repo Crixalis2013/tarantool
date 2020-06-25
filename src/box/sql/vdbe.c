@@ -599,7 +599,7 @@ mem_are_types_comparable(struct Mem *mems, struct key_def *def, uint32_t size,
 			continue;
 		}
 		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-			field_type_strs[type], mem_type_to_str(mem));
+			sql_value_to_diag_str(mem), field_type_strs[type]);
 		return false;
 	}
 	return true;
@@ -2377,14 +2377,9 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 		int type_arg1 = flags1 & (MEM_Bool | MEM_Blob);
 		int type_arg3 = flags3 & (MEM_Bool | MEM_Blob);
 		if (type_arg1 != type_arg3) {
-			char *inconsistent_type = type_arg1 != 0 ?
-						  mem_type_to_str(pIn3) :
-						  mem_type_to_str(pIn1);
-			char *expected_type     = type_arg1 != 0 ?
-						  mem_type_to_str(pIn1) :
-						  mem_type_to_str(pIn3);
 			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-				 inconsistent_type, expected_type);
+				 sql_value_to_diag_str(pIn3),
+				 mem_type_to_str(pIn1));
 			goto abort_due_to_error;
 		}
 		res = sqlMemCompare(pIn3, pIn1, NULL);
@@ -2436,13 +2431,13 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 		} else if (type == FIELD_TYPE_STRING) {
 			if ((flags1 & MEM_Str) == 0) {
 				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-					 mem_type_to_str(pIn3),
+					 sql_value_to_diag_str(pIn3),
 					 mem_type_to_str(pIn1));
 				goto abort_due_to_error;
 			}
 			if ((flags3 & MEM_Str) == 0) {
 				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-					 mem_type_to_str(pIn1),
+					 sql_value_to_diag_str(pIn1),
 					 mem_type_to_str(pIn3));
 				goto abort_due_to_error;
 			}

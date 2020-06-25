@@ -28,7 +28,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO ti(i) VALUES (100000000000000000000000000000000.1)
     ]], {
-        1, "Type mismatch: can not convert 1.0e+32 to integer"
+        1, "Type mismatch: can not convert '1.0e+32' (type: real) to integer"
     })
 
 test:do_catchsql_test(
@@ -44,7 +44,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO ti(i) VALUES (true)
     ]], {
-        1, "Type mismatch: can not convert TRUE to integer"
+        1, "Type mismatch: can not convert 'TRUE' (type: boolean) to integer"
     })
 
 test:do_catchsql_test(
@@ -52,7 +52,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO ti(i) VALUES ('33')
     ]], {
-        1, "Type mismatch: can not convert 33 to integer"
+        1, "Type mismatch: can not convert '33' (type: text) to integer"
     })
 
 test:do_catchsql_test(
@@ -100,7 +100,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO td(d) VALUES (true)
     ]], {
-        1, "Type mismatch: can not convert TRUE to double"
+        1, "Type mismatch: can not convert 'TRUE' (type: boolean) to double"
     })
 
 test:do_catchsql_test(
@@ -108,7 +108,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO td(d) VALUES ('33')
     ]], {
-        1, "Type mismatch: can not convert 33 to double"
+        1, "Type mismatch: can not convert '33' (type: text) to double"
     })
 
 test:do_catchsql_test(
@@ -132,7 +132,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO tb(b) VALUES (11)
     ]], {
-        1, "Type mismatch: can not convert 11 to boolean"
+        1, "Type mismatch: can not convert '11' (type: unsigned) to boolean"
     })
 
 test:do_catchsql_test(
@@ -140,7 +140,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO tb(b) VALUES (22.2)
     ]], {
-        1, "Type mismatch: can not convert 22.2 to boolean"
+        1, "Type mismatch: can not convert '22.2' (type: real) to boolean"
     })
 
 test:do_catchsql_test(
@@ -156,7 +156,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO tb(b) VALUES ('33')
     ]], {
-        1, "Type mismatch: can not convert 33 to boolean"
+        1, "Type mismatch: can not convert '33' (type: text) to boolean"
     })
 
 test:do_catchsql_test(
@@ -180,7 +180,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO tt(t) VALUES (11)
     ]], {
-        1, "Type mismatch: can not convert 11 to string"
+        1, "Type mismatch: can not convert '11' (type: unsigned) to string"
     })
 
 test:do_catchsql_test(
@@ -188,7 +188,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO tt(t) VALUES (22.2)
     ]], {
-        1, "Type mismatch: can not convert 22.2 to string"
+        1, "Type mismatch: can not convert '22.2' (type: real) to string"
     })
 
 test:do_catchsql_test(
@@ -196,7 +196,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO tt(t) VALUES (true)
     ]], {
-        1, "Type mismatch: can not convert TRUE to string"
+        1, "Type mismatch: can not convert 'TRUE' (type: boolean) to string"
     })
 
 test:do_catchsql_test(
@@ -228,7 +228,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO tv(v) VALUES (11)
     ]], {
-        1, "Type mismatch: can not convert 11 to varbinary"
+        1, "Type mismatch: can not convert '11' (type: unsigned) to varbinary"
     })
 
 test:do_catchsql_test(
@@ -236,7 +236,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO tv(v) VALUES (22.2)
     ]], {
-        1, "Type mismatch: can not convert 22.2 to varbinary"
+        1, "Type mismatch: can not convert '22.2' (type: real) to varbinary"
     })
 
 test:do_catchsql_test(
@@ -244,7 +244,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO tv(v) VALUES (true)
     ]], {
-        1, "Type mismatch: can not convert TRUE to varbinary"
+        1, "Type mismatch: can not convert 'TRUE' (type: boolean) to varbinary"
     })
 
 test:do_catchsql_test(
@@ -252,7 +252,7 @@ test:do_catchsql_test(
     [[
         INSERT INTO tv(v) VALUES ('33')
     ]], {
-        1, "Type mismatch: can not convert 33 to varbinary"
+        1, "Type mismatch: can not convert '33' (type: text) to varbinary"
     })
 
 test:do_catchsql_test(
@@ -359,7 +359,7 @@ test:do_catchsql_test(
     [[
         UPDATE ti SET i = 100000000000000000000000000000000.1 WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert 1.0e+32 to integer"
+        1, "Type mismatch: can not convert '1.0e+32' (type: real) to integer"
     })
 
 test:do_catchsql_test(
@@ -375,7 +375,7 @@ test:do_catchsql_test(
     [[
         UPDATE ti SET i = true WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert TRUE to integer"
+        1, "Type mismatch: can not convert 'TRUE' (type: boolean) to integer"
     })
 
 test:do_catchsql_test(
@@ -383,7 +383,7 @@ test:do_catchsql_test(
     [[
         UPDATE ti SET i = '33' WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert 33 to integer"
+        1, "Type mismatch: can not convert '33' (type: text) to integer"
     })
 
 test:do_catchsql_test(
@@ -431,7 +431,7 @@ test:do_catchsql_test(
     [[
         UPDATE td SET d = true WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert TRUE to double"
+        1, "Type mismatch: can not convert 'TRUE' (type: boolean) to double"
     })
 
 test:do_catchsql_test(
@@ -439,7 +439,7 @@ test:do_catchsql_test(
     [[
         UPDATE td SET d = '33' WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert 33 to double"
+        1, "Type mismatch: can not convert '33' (type: text) to double"
     })
 
 test:do_catchsql_test(
@@ -463,7 +463,7 @@ test:do_catchsql_test(
     [[
         UPDATE tb SET b = 11 WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert 11 to boolean"
+        1, "Type mismatch: can not convert '11' (type: unsigned) to boolean"
     })
 
 test:do_catchsql_test(
@@ -471,7 +471,7 @@ test:do_catchsql_test(
     [[
         UPDATE tb SET b = 22.2 WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert 22.2 to boolean"
+        1, "Type mismatch: can not convert '22.2' (type: real) to boolean"
     })
 
 test:do_catchsql_test(
@@ -487,7 +487,7 @@ test:do_catchsql_test(
     [[
         UPDATE tb SET b = '33' WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert 33 to boolean"
+        1, "Type mismatch: can not convert '33' (type: text) to boolean"
     })
 
 test:do_catchsql_test(
@@ -511,7 +511,7 @@ test:do_catchsql_test(
     [[
         UPDATE tt SET t = 11 WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert 11 to string"
+        1, "Type mismatch: can not convert '11' (type: unsigned) to string"
     })
 
 test:do_catchsql_test(
@@ -519,7 +519,7 @@ test:do_catchsql_test(
     [[
         UPDATE tt SET t = 22.2 WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert 22.2 to string"
+        1, "Type mismatch: can not convert '22.2' (type: real) to string"
     })
 
 test:do_catchsql_test(
@@ -527,7 +527,7 @@ test:do_catchsql_test(
     [[
         UPDATE tt SET t = true WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert TRUE to string"
+        1, "Type mismatch: can not convert 'TRUE' (type: boolean) to string"
     })
 
 test:do_catchsql_test(
@@ -559,7 +559,7 @@ test:do_catchsql_test(
     [[
         UPDATE tv SET v = 11 WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert 11 to varbinary"
+        1, "Type mismatch: can not convert '11' (type: unsigned) to varbinary"
     })
 
 test:do_catchsql_test(
@@ -567,7 +567,7 @@ test:do_catchsql_test(
     [[
         UPDATE tv SET v = 22.2 WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert 22.2 to varbinary"
+        1, "Type mismatch: can not convert '22.2' (type: real) to varbinary"
     })
 
 test:do_catchsql_test(
@@ -575,7 +575,7 @@ test:do_catchsql_test(
     [[
         UPDATE tv SET v = true WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert TRUE to varbinary"
+        1, "Type mismatch: can not convert 'TRUE' (type: boolean) to varbinary"
     })
 
 test:do_catchsql_test(
@@ -583,7 +583,7 @@ test:do_catchsql_test(
     [[
         UPDATE tv SET v = '33' WHERE a = 1;
     ]], {
-        1, "Type mismatch: can not convert 33 to varbinary"
+        1, "Type mismatch: can not convert '33' (type: text) to varbinary"
     })
 
 test:do_catchsql_test(
