@@ -39,6 +39,8 @@
 
 struct tx_manager
 {
+	/** Last prepare-sequence-number that was assigned to preped TX. */
+	int64_t last_psn;
 };
 
 static struct tx_manager txm;
@@ -564,6 +566,8 @@ txn_journal_entry_new(struct txn *txn)
 static int
 txn_prepare(struct txn *txn)
 {
+	txn->psn = ++txm.last_psn;
+
 	if (txn_has_flag(txn, TXN_IS_ABORTED_BY_YIELD)) {
 		assert(!txn_has_flag(txn, TXN_CAN_YIELD));
 		diag_set(ClientError, ER_TRANSACTION_YIELD);

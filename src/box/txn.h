@@ -214,6 +214,11 @@ struct txn {
 	 * Valid IDs start from 1.
 	 */
 	int64_t id;
+	/**
+	 * A sequential ID that is assigned when the TX become prepared.
+	 * Transactions are committed on in that order.
+	 */
+	int64_t psn;
 	/** Status of the TX */
 	enum txn_status status;
 	/** List of statements in a transaction. */
