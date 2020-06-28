@@ -75,6 +75,7 @@
 #include <libutil.h>
 #include "box/lua/init.h" /* box_lua_init() */
 #include "box/session.h"
+#include "box/txn.h"
 #include "systemd.h"
 #include "crypto/crypto.h"
 #include "core/popen.h"
@@ -667,6 +668,7 @@ tarantool_free(void)
 	random_free();
 #endif
 	crypto_free();
+	tx_manager_free();
 	coll_free();
 	systemd_free();
 	say_logger_free();
@@ -830,6 +832,7 @@ main(int argc, char **argv)
 	signal_init();
 	cbus_init();
 	coll_init();
+	tx_manager_init();
 	crypto_init();
 	systemd_init();
 	tarantool_lua_init(tarantool_bin, main_argc, main_argv);

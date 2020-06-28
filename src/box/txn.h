@@ -636,6 +636,12 @@ box_txn_savepoint(void);
 API_EXPORT int
 box_txn_rollback_to_savepoint(box_txn_savepoint_t *savepoint);
 
+void
+tx_manager_init();
+
+void
+tx_manager_free();
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif /* defined(__cplusplus) */

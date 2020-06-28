@@ -37,6 +37,12 @@
 #include "errinj.h"
 #include "iproto_constants.h"
 
+struct tx_manager
+{
+};
+
+static struct tx_manager txm;
+
 double too_long_threshold;
 
 /* Txn cache. */
@@ -977,4 +983,14 @@ txn_on_yield(struct trigger *trigger, void *event)
 	txn_rollback_to_svp(txn, NULL);
 	txn_set_flag(txn, TXN_IS_ABORTED_BY_YIELD);
 	return 0;
+}
+
+void
+tx_manager_init()
+{
+}
+
+void
+tx_manager_free()
+{
 }
