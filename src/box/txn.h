@@ -777,6 +777,30 @@ txm_tuple_clarify(struct txn *txn, struct tuple* tuple, uint32_t index,
 	return txm_tuple_clarify_slow(txn, tuple, index, mk_index, prepared_ok);
 }
 
+struct txm_snapshot_cleanser {
+	struct mh_snapshot_cleanser_t *ht;
+};
+
+int
+txm_snapshot_cleanser_create(struct txm_snapshot_cleanser* cleanser,
+                             struct space* space, const char* index_name);
+
+struct tuple *
+txm_snapshot_clafify_slow(struct txm_snapshot_cleanser* cleanser,
+                          struct tuple* tuple);
+
+static inline struct tuple *
+txm_snapshot_clafify(struct txm_snapshot_cleanser *cleanser,
+                     struct tuple *tuple)
+{
+	if (cleanser->ht == NULL)
+		return tuple;
+	return txm_snapshot_clafify_slow(cleanser, tuple);
+}
+
+void
+txm_snapshot_cleanser_destory(struct txm_snapshot_cleanser *cleanser);
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif /* defined(__cplusplus) */

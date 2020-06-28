@@ -1825,3 +1825,98 @@ txm_story_delete(struct txm_story *story)
 	struct mempool *pool = &txm.txm_story_pool[story->index_count];
 	mempool_free(pool, story);
 }
+
+
+static uint32_t
+txm_snapshot_cleanser_hash(const struct tuple *a)
+{
+	uintptr_t u = (uintptr_t)a;
+	if (sizeof(uintptr_t) <= sizeof(uint32_t))
+		return u;
+	else
+		return u ^ (u >> 32);
+}
+
+struct txm_snapshot_cleanser_entry
+{
+	struct tuple *from;
+	struct tuple *to;
+};
+
+#define mh_name _snapshot_cleanser
+#define mh_key_t struct tuple *
+#define mh_node_t struct txm_snapshot_cleanser_entry
+#define mh_arg_t int
+#define mh_hash(a, arg) (txm_snapshot_cleanser_hash((a)->from))
+#define mh_hash_key(a, arg) (txm_snapshot_cleanser_hash(a))
+#define mh_cmp(a, b, arg) (((a)->from) != ((b)->from))
+#define mh_cmp_key(a, b, arg) ((a) != ((b)->from))
+#define MH_SOURCE
+#include "salad/mhash.h"
+
+int
+txm_snapshot_cleanser_create(struct txm_snapshot_cleanser *cleanser,
+                             struct space *space, const char *index_name)
+{
+	cleanser->ht = NULL;
+	if (space == NULL && rlist_empty(&space->txm_stories))
+		return 0;
+	struct mh_snapshot_cleanser_t *ht = mh_snapshot_cleanser_new();
+	if (ht == NULL) {
+		diag_set(OutOfMemory, sizeof(*ht),
+		         index_name, "snapshot cleanser");
+		free(ht);
+		return -1;
+	}
+
+	struct txm_story *story;
+	rlist_foreach_entry(story, &space->txm_stories, in_space_stories) {
+		struct tuple *tuple = story->tuple;
+		struct tuple *clean = txm_tuple_clarify_slow(NULL, tuple,
+		                                             0, 0, true);
+		if (clean == tuple)
+			continue;
+
+		struct txm_snapshot_cleanser_entry entry;
+		entry.from = tuple;
+		entry.to = clean;
+		mh_int_t res =  mh_snapshot_cleanser_put(ht,  &entry, NULL, 0);
+		if (res == mh_end(ht)) {
+			diag_set(OutOfMemory, sizeof(entry),
+			         index_name, "snapshot rollback entry");
+			mh_snapshot_cleanser_delete(ht);
+			return -1;
+		}
+	}
+
+	cleanser->ht = ht;
+	return 0;
+}
+
+struct tuple *
+txm_snapshot_clafify_slow(struct txm_snapshot_cleanser* cleanser,
+                          struct tuple* tuple)
+{
+	assert(cleanser->ht != NULL);
+
+	struct mh_snapshot_cleanser_t *ht = cleanser->ht;
+	while (true) {
+		mh_int_t pos =  mh_snapshot_cleanser_find(ht, tuple, 0);
+		if (pos == mh_end(ht))
+			break;
+		struct txm_snapshot_cleanser_entry *entry =
+			mh_snapshot_cleanser_node(ht, pos);
+		assert(entry->from == tuple);
+		tuple = entry->to;
+	}
+
+	return tuple;
+}
+
+
+void
+txm_snapshot_cleanser_destory(struct txm_snapshot_cleanser *cleanser)
+{
+	if (cleanser->ht != NULL)
+		mh_snapshot_cleanser_delete(cleanser->ht);
+}

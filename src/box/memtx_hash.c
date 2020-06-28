@@ -33,6 +33,7 @@
 #include "fiber.h"
 #include "index.h"
 #include "tuple.h"
+#include "txn.h"
 #include "memtx_engine.h"
 #include "space.h"
 #include "schema.h" /* space_cache_find() */
@@ -101,7 +102,7 @@ hash_iterator_free(struct iterator *iterator)
 }
 
 static int
-hash_iterator_ge(struct iterator *ptr, struct tuple **ret)
+hash_iterator_ge_base(struct iterator *ptr, struct tuple **ret)
 {
 	assert(ptr->free == hash_iterator_free);
 	struct hash_iterator *it = (struct hash_iterator *) ptr;
@@ -113,10 +114,10 @@ hash_iterator_ge(struct iterator *ptr, struct tuple **ret)
 }
 
 static int
-hash_iterator_gt(struct iterator *ptr, struct tuple **ret)
+hash_iterator_gt_base(struct iterator *ptr, struct tuple **ret)
 {
 	assert(ptr->free == hash_iterator_free);
-	ptr->next = hash_iterator_ge;
+	ptr->next = hash_iterator_ge_base;
 	struct hash_iterator *it = (struct hash_iterator *) ptr;
 	struct memtx_hash_index *index = (struct memtx_hash_index *)ptr->index;
 	struct tuple **res = light_index_iterator_get_and_next(&index->hash_table,
@@ -128,6 +129,31 @@ hash_iterator_gt(struct iterator *ptr, struct tuple **ret)
 	return 0;
 }
 
+#define WRAP_ITERATOR_METHOD(name)                                             \
+static int                                                                     \
+name(struct iterator *iterator, struct tuple **ret)                            \
+{                                                                              \
+	struct txn *txn = in_txn();                                            \
+	bool is_rw = txn != NULL;                                              \
+	uint32_t iid = iterator->index->def->iid;                              \
+	bool first = true;                                                     \
+	do {                                                                   \
+		int rc = first ? name##_base(iterator, ret)                    \
+			       : hash_iterator_ge_base(iterator, ret);         \
+		if (rc != 0 || *ret == NULL)                                   \
+			return rc;                                             \
+		first = false;                                                 \
+		*ret = txm_tuple_clarify(txn, *ret, iid, 0, is_rw);            \
+	} while (*ret == NULL);                                                \
+	return 0;                                                              \
+}                                                                              \
+struct forgot_to_add_semicolon
+
+WRAP_ITERATOR_METHOD(hash_iterator_ge);
+WRAP_ITERATOR_METHOD(hash_iterator_gt);
+
+#undef WRAP_ITERATOR_METHOD
+
 static int
 hash_iterator_eq_next(MAYBE_UNUSED struct iterator *it, struct tuple **ret)
 {
@@ -136,11 +162,24 @@ hash_iterator_eq_next(MAYBE_UNUSED struct iterator *it, struct tuple **ret)
 }
 
 static int
-hash_iterator_eq(struct iterator *it, struct tuple **ret)
+hash_iterator_eq(struct iterator *ptr, struct tuple **ret)
 {
-	it->next = hash_iterator_eq_next;
-	return hash_iterator_ge(it, ret);
+	ptr->next = hash_iterator_eq_next;
+	assert(ptr->free == hash_iterator_free);
+	struct hash_iterator *it = (struct hash_iterator *) ptr;
+	struct memtx_hash_index *index = (struct memtx_hash_index *)ptr->index;
+	struct tuple **res = light_index_iterator_get_and_next(&index->hash_table,
+							       &it->iterator);
+	if (res == NULL) {
+		*ret = NULL;
+		return 0;
+	}
+	struct txn *txn = in_txn();
+	bool is_rw = txn != NULL;
+	*ret = txm_tuple_clarify(txn, *res, ptr->index->def->iid, 0, is_rw);
+	return 0;
 }
+
 
 /* }}} */
 
@@ -282,8 +321,13 @@ memtx_hash_index_get(struct index *base, const char *key,
 	*result = NULL;
 	uint32_t h = key_hash(key, base->def->key_def);
 	uint32_t k = light_index_find_key(&index->hash_table, h, key);
-	if (k != light_index_end)
-		*result = light_index_get(&index->hash_table, k);
+	if (k != light_index_end) {
+		struct tuple *tuple = light_index_get(&index->hash_table, k);
+		uint32_t iid = base->def->iid;
+		struct txn *txn = in_txn();
+		bool is_rw = txn != NULL;
+		*result = txm_tuple_clarify(txn, tuple, iid, 0, is_rw);
+	}
 	return 0;
 }
 
@@ -401,6 +445,7 @@ struct hash_snapshot_iterator {
 	struct snapshot_iterator base;
 	struct memtx_hash_index *index;
 	struct light_index_iterator iterator;
+	struct txm_snapshot_cleanser cleanser;
 };
 
 /**
@@ -418,6 +463,7 @@ hash_snapshot_iterator_free(struct snapshot_iterator *iterator)
 				      it->index->base.engine);
 	light_index_iterator_destroy(&it->index->hash_table, &it->iterator);
 	index_unref(&it->index->base);
+	txm_snapshot_cleanser_destory(&it->cleanser);
 	free(iterator);
 }
 
@@ -434,13 +480,24 @@ hash_snapshot_iterator_next(struct snapshot_iterator *iterator,
 	struct hash_snapshot_iterator *it =
 		(struct hash_snapshot_iterator *) iterator;
 	struct light_index_core *hash_table = &it->index->hash_table;
-	struct tuple **res = light_index_iterator_get_and_next(hash_table,
-							       &it->iterator);
-	if (res == NULL) {
-		*data = NULL;
-		return 0;
+
+	while (true) {
+		struct tuple **res =
+			light_index_iterator_get_and_next(hash_table,
+			                                  &it->iterator);
+		if (res == NULL) {
+			*data = NULL;
+			return 0;
+		}
+
+		struct tuple *tuple = *res;
+		tuple = txm_snapshot_clafify(&it->cleanser, tuple);
+
+		if (tuple != NULL) {
+			*data = tuple_data_range(*res, size);
+			return 0;
+		}
 	}
-	*data = tuple_data_range(*res, size);
 	return 0;
 }
 
