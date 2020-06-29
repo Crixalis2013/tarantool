@@ -139,6 +139,8 @@ struct relay {
 	double last_row_time;
 	/** Relay sync state. */
 	enum relay_state state;
+	/** Triggers invoked on state change. */
+	struct rlist on_state;
 
 	struct {
 		/* Align to prevent false-sharing with tx thread */
@@ -147,6 +149,41 @@ struct relay {
 		struct vclock vclock;
 	} tx;
 };
+
+const char *
+relay_get_state_str(const struct relay *relay)
+{
+	switch(relay->state) {
+	case RELAY_OFF:
+		return "off";
+	case RELAY_FOLLOW:
+		return "follow";
+	case RELAY_STOPPED:
+		return "stopped";
+	default:
+		return "<unknown relay state>";
+	}
+}
+
+static inline void
+relay_set_state(struct relay *relay, enum relay_state state)
+{
+	relay->state = state;
+	/* FIXME Is say_error enough? */
+	trigger_run(&relay->on_state, relay);
+}
+
+struct rlist *
+relay_on_state(struct relay *relay)
+{
+	return &relay->on_state;
+}
+
+struct replica *
+relay_replica(struct relay *relay)
+{
+	return relay->replica;
+}
 
 struct diag*
 relay_get_diag(struct relay *relay)
@@ -193,7 +230,8 @@ relay_new(struct replica *replica)
 	fiber_cond_create(&relay->reader_cond);
 	diag_create(&relay->diag);
 	stailq_create(&relay->pending_gc);
-	relay->state = RELAY_OFF;
+	rlist_create(&relay->on_state);
+	relay_set_state(relay, RELAY_OFF);
 	return relay;
 }
 
@@ -210,7 +248,7 @@ relay_start(struct relay *relay, int fd, uint64_t sync,
 	diag_clear(&relay->diag);
 	coio_create(&relay->io, fd);
 	relay->sync = sync;
-	relay->state = RELAY_FOLLOW;
+	relay_set_state(relay, RELAY_FOLLOW);
 	relay->last_row_time = ev_monotonic_now(loop());
 }
 
@@ -257,7 +295,7 @@ relay_stop(struct relay *relay)
 	if (relay->r != NULL)
 		recovery_delete(relay->r);
 	relay->r = NULL;
-	relay->state = RELAY_STOPPED;
+	relay_set_state(relay, RELAY_STOPPED);
 	/*
 	 * Needed to track whether relay thread is running or not
 	 * for relay_cancel(). Id is reset to a positive value
@@ -272,6 +310,7 @@ relay_delete(struct relay *relay)
 	if (relay->state == RELAY_FOLLOW)
 		relay_stop(relay);
 	fiber_cond_destroy(&relay->reader_cond);
+	trigger_destroy(&relay->on_state);
 	diag_destroy(&relay->diag);
 	TRASH(relay);
 	free(relay);

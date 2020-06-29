@@ -114,7 +114,7 @@ replication_free(void)
 }
 
 int
-replica_check_id(uint32_t replica_id)
+replica_check_id_format(uint32_t replica_id)
 {
 	if (replica_id == REPLICA_ID_NIL) {
 		diag_set(ClientError, ER_REPLICA_ID_IS_RESERVED,
@@ -126,6 +126,14 @@ replica_check_id(uint32_t replica_id)
 			  (unsigned) replica_id);
 		return -1;
 	}
+	return 0;
+}
+
+int
+replica_check_id(uint32_t replica_id)
+{
+	if (replica_check_id_format(replica_id) != 0)
+		return -1;
 	/*
 	 * It's okay to update the instance id while it is joining to
 	 * a cluster as long as the id is set by the time bootstrap is
@@ -900,13 +908,20 @@ replica_on_relay_stop(struct replica *replica)
 	 * collector then. See also replica_clear_id.
 	 */
 	if (replica->id == REPLICA_ID_NIL) {
-		if (!replica->anon) {
-			gc_consumer_unregister(replica->gc);
-			replica->gc = NULL;
-		} else {
+		if (replica->anon) {
 			assert(replica->gc == NULL);
 			assert(replicaset.anon_count > 0);
 			replicaset.anon_count--;
+		} else if (replica->gc != NULL) {
+			/*
+			 * As soon as the relay can run triggers
+			 * when the state of the relay changes,
+			 * it is possible that running fiber will
+			 * return control to another one
+			 * that unregisters the gc consumer.
+			 */
+			gc_consumer_unregister(replica->gc);
+			replica->gc = NULL;
 		}
 	}
 	if (replica_is_orphan(replica)) {

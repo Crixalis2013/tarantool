@@ -270,6 +270,14 @@ local function initial_1_7_5()
     format = {}
     format[1] = {name='id', type='unsigned'}
     format[2] = {name='uuid', type='string'}
+    -- additional fields have to be nullable because they useless
+    -- for instance itself
+    format[3] = {name='host', type='string', is_nullable = true}
+    format[4] = {name='relay_timestamp', type='double', is_nullable = true}
+    format[5] = {name='relay_vclock', type='string', is_nullable = true}
+    format[6] = {name='relay_status', type='string', is_nullable = true}
+    -- sets only if status is RELAY_STOPPED
+    format[7] = {name='relay_err', type='map', is_nullable = true}
     _space:insert{_cluster.id, ADMIN, '_cluster', 'memtx', 0, MAP, format}
     -- primary key: node id
     log.info("create index primary on _cluster")

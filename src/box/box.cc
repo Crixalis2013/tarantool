@@ -1479,7 +1479,15 @@ box_session_push(const char *data, const char *data_end)
 static inline void
 box_register_replica(uint32_t id, const struct tt_uuid *uuid)
 {
-	if (boxk(IPROTO_INSERT, BOX_CLUSTER_ID, "[%u%s]",
+	if (boxk(IPROTO_INSERT, BOX_CLUSTER_ID, "["
+		 "%u" /* replica id */
+		 "%s" /* uuid */
+		 "NIL" /* ip+port */
+		 "NIL" /* timestamp */
+		 "NIL" /* vclock */
+		 "NIL" /* relay status */
+		 "NIL" /* err str if exist*/
+		 "]",
 		 (unsigned) id, tt_uuid_str(uuid)) != 0)
 		diag_raise();
 	assert(replica_by_uuid(uuid)->id == id);

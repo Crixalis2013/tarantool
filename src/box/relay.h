@@ -77,6 +77,10 @@ relay_get_diag(struct relay *relay);
 enum relay_state
 relay_get_state(const struct relay *relay);
 
+/** Return the current state of relay as a string. */
+const char *
+relay_get_state_str(const struct relay *relay);
+
 /**
  * Returns relay's vclock
  * @param relay relay
@@ -126,5 +130,13 @@ void
 relay_subscribe(struct replica *replica, int fd, uint64_t sync,
 		struct vclock *replica_vclock, uint32_t replica_version_id,
 		uint32_t replica_id_filter);
+
+/** Get pointer to triggers list. */
+struct rlist *
+relay_on_state(struct relay *relay);
+
+/** Return replica associated with this relay. */
+struct replica *
+relay_replica(struct relay *relay);
 
 #endif /* TARANTOOL_REPLICATION_RELAY_H_INCLUDED */
