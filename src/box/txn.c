@@ -108,6 +108,7 @@ txn_stmt_new(struct region *region)
 	stmt->engine_savepoint = NULL;
 	stmt->row = NULL;
 	stmt->has_triggers = false;
+	stmt->preserve_old_tuple = false;
 	return stmt;
 }
 
@@ -350,6 +351,8 @@ txn_commit_stmt(struct txn *txn, struct request *request)
 	 */
 	if (stmt->space != NULL && !rlist_empty(&stmt->space->on_replace) &&
 	    stmt->space->run_triggers && (stmt->old_tuple || stmt->new_tuple)) {
+		/* Triggers see old_tuple and that tuple must remain the same */
+		stmt->preserve_old_tuple = true;
 		int rc = 0;
 		if(!space_is_temporary(stmt->space)) {
 			rc = trigger_run(&stmt->space->on_replace, txn);

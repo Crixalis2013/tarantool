@@ -129,6 +129,15 @@ struct txn_stmt {
 	struct xrow_header *row;
 	/** on_commit and/or on_rollback list is not empty. */
 	bool has_triggers;
+	/**
+	 * Whether the stmt upon commit must replace exactly old_tuple from it.
+	 * Explanation: to the moment of commit of the statement actual state
+	 * of the space could change due to commit of other transaction(s).
+	 * Some statements require the replaced tuple at the moment of commit to
+	 * be exactly the same as replaced tuple at the moment of execution.
+	 * Some - doesn't.
+	 */
+	bool preserve_old_tuple;
 	/** Commit/rollback triggers associated with this statement. */
 	struct rlist on_commit;
 	struct rlist on_rollback;
