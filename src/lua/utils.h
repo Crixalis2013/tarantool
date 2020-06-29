@@ -474,6 +474,12 @@ LUA_API int
 luaT_cpcall(lua_State *L, lua_CFunction func, void *ud);
 
 /**
+ * Checks whether the argument is true and panics in case it is.
+ */
+LUA_API void
+luaT_abort_if(bool condition);
+
+/**
  * Get global Lua state used by Tarantool
  */
 LUA_API lua_State *
@@ -609,7 +615,7 @@ luaT_newthread(lua_State *L)
 	if (luaT_cpcall(L, luaT_newthread_wrapper, &L1) != 0) {
 		return NULL;
 	}
-	assert(L1 != NULL);
+	luaT_abort_if(L1 == NULL);
 	setthreadV(L, L->top, L1);
 	incr_top(L);
 	return L1;

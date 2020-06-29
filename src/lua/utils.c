@@ -989,6 +989,13 @@ luaT_cpcall(lua_State *L, lua_CFunction func, void *ud)
 	return 0;
 }
 
+void
+luaT_abort_if(bool condition)
+{
+	if (condition)
+		panic("Unexpected LuaJIT fail!");
+}
+
 /**
  * This function exists because lua_tostring does not use
  * __tostring metamethod, and this metamethod has to be used
