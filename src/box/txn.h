@@ -293,6 +293,7 @@ struct txn {
 	uint32_t fk_deferred_count;
 	/** List of savepoints to find savepoint by name. */
 	struct rlist savepoints;
+	struct rlist read_set;
 	struct rlist conflict_list;
 	struct rlist conflicted_by_list;
 };
@@ -800,6 +801,9 @@ txm_snapshot_clafify(struct txm_snapshot_cleanser *cleanser,
 
 void
 txm_snapshot_cleanser_destory(struct txm_snapshot_cleanser *cleanser);
+
+int
+tx_track_read(struct txn *txn, struct space *space, struct tuple *tuple);
 
 #if defined(__cplusplus)
 } /* extern "C" */

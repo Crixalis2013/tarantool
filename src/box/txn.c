@@ -76,6 +76,13 @@ struct tx_manager
 /** The one and only instance of tx_manager. */
 static struct tx_manager txm;
 
+struct tx_read_tracker {
+	struct txn *reader;
+	struct txm_story *story;
+	struct rlist in_reader_list;
+	struct rlist in_read_set;
+};
+
 struct tx_conflict_tracker {
 	struct txn *wreaker;
 	struct txn *victim;
@@ -238,6 +245,7 @@ txn_new(void)
 	}
 	assert(region_used(&region) == sizeof(*txn));
 	txn->region = region;
+	rlist_create(&txn->read_set);
 	rlist_create(&txn->conflict_list);
 	rlist_create(&txn->conflicted_by_list);
 	return txn;
@@ -249,6 +257,14 @@ txn_new(void)
 inline static void
 txn_free(struct txn *txn)
 {
+	struct tx_read_tracker *tracker, *tmp;
+	rlist_foreach_entry_safe(tracker, &txn->read_set,
+				 in_read_set, tmp) {
+		rlist_del(&tracker->in_reader_list);
+		rlist_del(&tracker->in_read_set);
+	}
+	assert(rlist_empty(&txn->read_set));
+
 	struct tx_conflict_tracker *entry, *next;
 	rlist_foreach_entry_safe(entry, &txn->conflict_list,
 				 in_conflict_list, next) {
@@ -1919,4 +1935,72 @@ txm_snapshot_cleanser_destory(struct txm_snapshot_cleanser *cleanser)
 {
 	if (cleanser->ht != NULL)
 		mh_snapshot_cleanser_delete(cleanser->ht);
+}
+
+int
+tx_track_read(struct txn *txn, struct space *space, struct tuple *tuple)
+{
+	if (tuple == NULL)
+		return 0;
+	if (txn == NULL)
+		return 0;
+
+	struct txm_story *story;
+	struct tx_read_tracker *tracker = NULL;
+
+	if (!tuple->is_dirty) {
+		story = txm_story_new(space, tuple);
+		if (story != NULL)
+			return -1;
+		size_t sz;
+		tracker = region_alloc_object(&txn->region,
+		                              struct tx_read_tracker, &sz);
+		if (tracker == NULL) {
+			diag_set(OutOfMemory, sz, "tx region", "read_tracker");
+			txm_story_delete(story);
+			return -1;
+		}
+		tracker->reader = txn;
+		tracker->story = story;
+		rlist_add(&story->reader_list, &tracker->in_reader_list);
+		rlist_add(&txn->read_set, &tracker->in_read_set);
+		return 0;
+	}
+	story = txm_story_get(tuple);
+
+	struct rlist *r1 = story->reader_list.next;
+	struct rlist *r2 = txn->read_set.next;
+	while (r1 != &story->reader_list && r2 != &txn->read_set) {
+		tracker = rlist_entry(r1, struct tx_read_tracker,
+				      in_reader_list);
+		assert(tracker->story == story);
+		if (tracker->reader == txn)
+			break;
+		tracker = rlist_entry(r2, struct tx_read_tracker,
+				      in_read_set);
+		assert(tracker->reader == txn);
+		if (tracker->story == story)
+			break;
+		tracker = NULL;
+		r1 = r1->next;
+		r2 = r2->next;
+	}
+	if (tracker != NULL) {
+		/* Move to the beginning of a list for faster further lookups.*/
+		rlist_del(&tracker->in_reader_list);
+		rlist_del(&tracker->in_read_set);
+	} else {
+		size_t sz;
+		tracker = region_alloc_object(&txn->region,
+					      struct tx_read_tracker, &sz);
+		if (tracker == NULL) {
+			diag_set(OutOfMemory, sz, "tx region", "read_tracker");
+			return -1;
+		}
+		tracker->reader = txn;
+		tracker->story = story;
+	}
+	rlist_add(&story->reader_list, &tracker->in_reader_list);
+	rlist_add(&txn->read_set, &tracker->in_read_set);
+	return 0;
 }
