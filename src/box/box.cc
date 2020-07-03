@@ -323,6 +323,7 @@ recovery_journal_write(struct journal *base,
 {
 	struct recovery_journal *journal = (struct recovery_journal *) base;
 	entry->res = vclock_sum(journal->vclock);
+	journal_async_complete(base, entry);
 	return 0;
 }
 
@@ -330,8 +331,7 @@ static void
 recovery_journal_create(struct vclock *v)
 {
 	static struct recovery_journal journal;
-	journal_create(&journal.base, journal_no_write_async,
-		       journal_no_write_async_cb,
+	journal_create(&journal.base, NULL, txn_complete_async,
 		       recovery_journal_write);
 	journal.vclock = v;
 	journal_set(&journal.base);
@@ -2017,6 +2017,14 @@ engine_init()
 	box_set_vinyl_timeout();
 }
 
+static int
+bootstrap_journal_write(struct journal *base, struct journal_entry *entry)
+{
+	entry->res = 0;
+	journal_async_complete(base, entry);
+	return 0;
+}
+
 /**
  * Initialize the first replica of a new replica set.
  */
@@ -2438,6 +2446,14 @@ box_cfg_xc(void)
 		if (!cfg_geti("hot_standby") || checkpoint == NULL)
 			tnt_raise(ClientError, ER_ALREADY_RUNNING, cfg_gets("wal_dir"));
 	}
+	struct journal bootstrap_journal;
+	journal_create(&bootstrap_journal, NULL, txn_complete_async,
+		       bootstrap_journal_write);
+	journal_set(&bootstrap_journal);
+	auto bootstrap_journal_guard = make_scoped_guard([] {
+		journal_set(NULL);
+	});
+
 	bool is_bootstrap_leader = false;
 	if (checkpoint != NULL) {
 		/* Recover the instance from the local directory */
@@ -2449,6 +2465,9 @@ box_cfg_xc(void)
 			  &is_bootstrap_leader);
 	}
 	fiber_gc();
+
+	bootstrap_journal_guard.is_active = false;
+	assert(current_journal != &bootstrap_journal);
 
 	/*
 	 * Check for correct registration of the instance in _cluster

@@ -652,11 +652,7 @@ txn_commit(struct txn *txn)
 		diag_log();
 		return -1;
 	}
-
-	if (!txn_has_flag(txn, TXN_IS_DONE)) {
-		txn->signature = req->res;
-		txn_complete(txn);
-	}
+	assert(txn_has_flag(txn, TXN_IS_DONE));
 
 	int res = txn->signature >= 0 ? 0 : -1;
 	if (res != 0) {
