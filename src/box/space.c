@@ -359,9 +359,6 @@ space_before_replace(struct space *space, struct txn *txn,
 			return -1;
 		key = request->key;
 		part_count = mp_decode_array(&key);
-		if (exact_key_validate(index->def->key_def,
-				       key, part_count) != 0)
-			return -1;
 		break;
 	case IPROTO_INSERT:
 	case IPROTO_REPLACE:
@@ -380,6 +377,9 @@ space_before_replace(struct space *space, struct txn *txn,
 		/* Unknown request type, nothing to do. */
 		return 0;
 	}
+	if (key != NULL &&
+	    exact_key_validate(index->def->key_def, key, part_count) != 0)
+		return -1;
 
 	struct tuple *old_tuple = NULL;
 	if (index != NULL &&
