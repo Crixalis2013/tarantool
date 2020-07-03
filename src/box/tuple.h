@@ -1093,6 +1093,56 @@ tuple_unref(struct tuple *tuple)
 	}
 }
 
+/**
+ * General case of setting a smart pointer to tuple.
+ * If *dst pointed to tuple - unref it.
+ * If src points to tuple - ref it.
+ * @param dst - destination smart pointer (lvalue).
+ * @param src - source pointer (rvalue).
+ */
+static inline void
+tusp_set(struct tuple **dst, struct tuple *src)
+{
+	if (*dst != NULL)
+		tuple_unref(*dst);
+	if (src != NULL)
+		tuple_ref(src);
+	*dst = src;
+}
+
+/**
+ * Specific cases of setting a smart pointer to tuple.
+ * Just like @sa tusp_set, but have two-letter prefix,
+ * giving some additional information about possible values of *dst and src.
+ * Possible letters (one for *dst, second - for src):
+ * N - the corresponding pointer is definitely NULL.
+ * T - the corresponding pointer is non-null pointer to tuple.
+ * U - unknown, the function has to compare pointer with NULL by itself.
+ * @param dst - destination smart pointer (lvalue).
+ * @param src - source pointer (rvalue).
+ */
+#define TUSP_SPEC_DEF(name, dst_mode, src_mode)                      \
+static inline void                                                   \
+name(struct tuple **dst, struct tuple *src)                          \
+{                                                                    \
+	if (dst_mode == 1 || (dst_mode == 2 && *dst != NULL))        \
+		tuple_unref(*dst);                                   \
+	if (src_mode == 1 || (src_mode == 2 && src != NULL))         \
+		tuple_ref(src);                                      \
+	*dst = src;                                                  \
+}                                                                    \
+struct forgot_to_add_semicolon
+
+TUSP_SPEC_DEF(tusp_setNN, 0, 0);
+TUSP_SPEC_DEF(tusp_setNT, 0, 1);
+TUSP_SPEC_DEF(tusp_setNU, 0, 2);
+TUSP_SPEC_DEF(tusp_setTN, 1, 0);
+TUSP_SPEC_DEF(tusp_setTT, 1, 1);
+TUSP_SPEC_DEF(tusp_setTU, 1, 2);
+TUSP_SPEC_DEF(tusp_setUN, 2, 0);
+TUSP_SPEC_DEF(tusp_setUT, 2, 1);
+TUSP_SPEC_DEF(tusp_setUU, 2, 2);
+
 extern struct tuple *box_tuple_last;
 
 /**
