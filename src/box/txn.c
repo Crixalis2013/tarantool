@@ -171,6 +171,9 @@ txn_stmt_new(struct region *region)
 static inline void
 txn_stmt_destroy(struct txn_stmt *stmt)
 {
+	if (stmt->add_story != NULL || stmt->del_story != NULL)
+		txm_history_unlink_stmt(stmt);
+
 	if (stmt->old_tuple != NULL)
 		tuple_unref(stmt->old_tuple);
 	if (stmt->new_tuple != NULL)

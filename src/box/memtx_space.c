@@ -260,6 +260,18 @@ memtx_space_replace_all_keys(struct space *space, struct tuple *old_tuple,
 	if (pk == NULL)
 		return -1;
 	assert(pk->def->opts.is_unique);
+
+	struct txn *txn = in_txn();
+	struct txn_stmt *stmt = txn == NULL ? NULL : txn_current_stmt(txn);
+	if (stmt != NULL) {
+		return txm_history_link_stmt(txn_current_stmt(txn),
+		                             old_tuple, new_tuple, mode,
+		                             result);
+	} else {
+		/** Ephemeral space */
+		assert(space->def->id == 0);
+	}
+
 	/*
 	 * If old_tuple is not NULL, the index has to
 	 * find and delete it, or return an error.

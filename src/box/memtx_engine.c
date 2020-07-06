@@ -339,6 +339,35 @@ memtx_engine_begin(struct engine *engine, struct txn *txn)
 	return 0;
 }
 
+static int
+memtx_engine_prepare(struct engine *engine, struct txn *txn)
+{
+	(void)engine;
+	struct txn_stmt *stmt;
+	stailq_foreach_entry(stmt, &txn->stmts, next) {
+		if (stmt->add_story != NULL || stmt->del_story != NULL)
+			txm_history_prepare_stmt(stmt);
+	}
+	return 0;
+}
+
+static void
+memtx_engine_commit(struct engine *engine, struct txn *txn)
+{
+	(void)engine;
+	struct txn_stmt *stmt;
+	stailq_foreach_entry(stmt, &txn->stmts, next) {
+		if (stmt->add_story != NULL || stmt->del_story != NULL)
+		{
+			ssize_t bsize = txm_history_release_stmt(stmt);
+			assert(stmt->space->engine == engine);
+			struct memtx_space *mspace =
+				(struct memtx_space *)stmt->space;
+			mspace->bsize += bsize;
+		}
+	}
+}
+
 static void
 memtx_engine_rollback_statement(struct engine *engine, struct txn *txn,
 				struct txn_stmt *stmt)
@@ -348,12 +377,16 @@ memtx_engine_rollback_statement(struct engine *engine, struct txn *txn,
 	if (stmt->old_tuple == NULL && stmt->new_tuple == NULL)
 		return;
 	struct space *space = stmt->space;
-	struct memtx_space *memtx_space = (struct memtx_space *)space;
+	struct memtx_space* memtx_space = (struct memtx_space*) space;
 	uint32_t index_count;
 
 	/* Only roll back the changes if they were made. */
 	if (stmt->engine_savepoint == NULL)
 		return;
+
+	if (memtx_space->replace == memtx_space_replace_all_keys &&
+	    (stmt->add_story != NULL || stmt->del_story != NULL))
+		return txm_history_unlink_stmt(stmt);
 
 	if (memtx_space->replace == memtx_space_replace_all_keys)
 		index_count = space->index_count;
@@ -362,12 +395,14 @@ memtx_engine_rollback_statement(struct engine *engine, struct txn *txn,
 	else
 		panic("transaction rolled back during snapshot recovery");
 
-	for (uint32_t i = 0; i < index_count; i++) {
-		struct tuple *unused;
-		struct index *index = space->index[i];
+	for (uint32_t i = 0; i < index_count; i++)
+	{
+		struct tuple* unused;
+		struct index* index = space->index[i];
 		/* Rollback must not fail. */
 		if (index_replace(index, stmt->new_tuple, stmt->old_tuple,
-				  DUP_INSERT, &unused) != 0) {
+		                  DUP_INSERT, &unused) != 0)
+		{
 			diag_log();
 			unreachable();
 			panic("failed to rollback change");
@@ -914,8 +949,8 @@ static const struct engine_vtab memtx_engine_vtab = {
 	/* .complete_join = */ memtx_engine_complete_join,
 	/* .begin = */ memtx_engine_begin,
 	/* .begin_statement = */ generic_engine_begin_statement,
-	/* .prepare = */ generic_engine_prepare,
-	/* .commit = */ generic_engine_commit,
+	/* .prepare = */ memtx_engine_prepare,
+	/* .commit = */ memtx_engine_commit,
 	/* .rollback_statement = */ memtx_engine_rollback_statement,
 	/* .rollback = */ generic_engine_rollback,
 	/* .switch_to_ro = */ generic_engine_switch_to_ro,
