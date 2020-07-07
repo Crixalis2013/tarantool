@@ -581,23 +581,22 @@ mem_convert_to_numeric(struct Mem *mem, enum field_type type, bool is_precise)
 static bool
 mem_are_types_comparable(struct Mem *mems, struct key_def *def, uint32_t size,
 			 bool is_op_eq, bool *is_not_converted) {
-	assert(!is_op_eq || !*is_not_converted);
 	for (uint32_t i = 0; i < size; ++i) {
 		enum field_type type = def->parts[i].type;
 		struct Mem *mem = &mems[i];
 		if (mem_is_type_compatible(mem, type))
 			continue;
-		if (mem_convert_to_numeric(mem, type, true) == 0)
-			continue;
-		if (sql_type_is_numeric(type) &&
-		    (mem->flags & (MEM_Int | MEM_UInt | MEM_Real)) != 0) {
+		if (!mp_type_is_numeric(mem_mp_type(mem)) ||
+		    !sql_type_is_numeric(type)) {
+			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+				field_type_strs[type], mem_type_to_str(mem));
+			return false;
+		}
+		mem_convert_to_numeric(mem, type, true);
+		if (mem_convert_to_numeric(mem, type, true) != 0) {
 			if (is_op_eq)
 				*is_not_converted = true;
-			continue;
 		}
-		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-			field_type_strs[type], mem_type_to_str(mem));
-		return false;
 	}
 	return true;
 }

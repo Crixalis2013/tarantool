@@ -2144,6 +2144,9 @@ box.execute([[SELECT * FROM "s" WHERE "id" = ?;]])
     type: string
   rows: []
 ...
+s:drop()
+---
+...
 --
 -- gh-4230: Make sure that there is no implicit cast between
 -- string and number.
@@ -2368,7 +2371,4 @@ box.execute([[SELECT a FROM t WHERE a = '1']]);
 box.execute([[DROP TABLE t;]])
 ---
 - row_count: 1
-...
-s:drop()
----
 ...

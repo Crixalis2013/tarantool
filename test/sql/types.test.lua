@@ -485,6 +485,7 @@ s:format({ \
 })
 
 box.execute([[SELECT * FROM "s" WHERE "id" = ?;]])
+s:drop()
 
 --
 -- gh-4230: Make sure that there is no implicit cast between
@@ -536,5 +537,3 @@ box.execute([[SELECT a FROM t WHERE a = 1]]);
 box.execute([[SELECT a FROM t WHERE a = 1.0]]);
 box.execute([[SELECT a FROM t WHERE a = '1']]);
 box.execute([[DROP TABLE t;]])
-
-s:drop()
