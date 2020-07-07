@@ -1014,6 +1014,7 @@ vy_log_rebootstrap(void)
 int
 vy_log_bootstrap(void)
 {
+	errno = 0;
 	if (xdir_scan(&vy_log.dir) < 0 && errno != ENOENT)
 		return -1;
 	if (xdir_last_vclock(&vy_log.dir, &vy_log.last_checkpoint) >= 0)
@@ -1036,6 +1037,7 @@ vy_log_begin_recovery(const struct vclock *vclock)
 	 * because vinyl might not be even in use. Complain only
 	 * on an attempt to write a vylog.
 	 */
+	errno = 0;
 	if (xdir_scan(&vy_log.dir) < 0 && errno != ENOENT)
 		return NULL;
 
