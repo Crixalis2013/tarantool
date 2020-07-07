@@ -1190,8 +1190,11 @@ sqlValueText(sql_value * pVal)
 	return valueToText(pVal);
 }
 
+/**
+ * 
+ */
 enum {
-	DIAG_STR_LEN_MAX = 80,
+	SQL_VALUE_DIAG_LEN_MAX = 80,
 };
 
 const char *
@@ -1203,9 +1206,10 @@ sql_value_to_diag_str(sql_value *value)
 	char *str = (char *)sqlValueText(value);
 	if (str == NULL)
 		return "NULL";
-	if (strlen(str) < DIAG_STR_LEN_MAX)
+	if (strlen(str) < SQL_VALUE_DIAG_LEN_MAX)
 		return tt_sprintf("'%s' (type: %s)", str, type);
-	return tt_sprintf("'%.80s...' (type: %s)", str, type);
+	return tt_sprintf("'%.*s...' (type: %s)", SQL_VALUE_DIAG_LEN_MAX, str,
+			  type);
 }
 
 /*
