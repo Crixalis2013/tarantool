@@ -760,7 +760,7 @@ struct alter_space;
 
 class AlterSpaceOp {
 public:
-	AlterSpaceOp(struct alter_space *alter);
+	explicit AlterSpaceOp(struct alter_space *alter);
 
 	/** Link in alter_space::ops. */
 	struct rlist link;
@@ -769,7 +769,7 @@ public:
 	 * the space definition and/or key list that will be used
 	 * for creating the new space. Must not yield or fail.
 	 */
-	virtual void alter_def(struct alter_space * /* alter */) {}
+	virtual void alter_def(struct alter_space * /* alter */) noexcept {}
 	/**
 	 * Called after creating a new space. Used for performing
 	 * long-lasting operations, such as index rebuild or format
@@ -783,21 +783,21 @@ public:
 	 * state to the new space (e.g. move unchanged indexes).
 	 * Must not yield or fail.
 	 */
-	virtual void alter(struct alter_space * /* alter */) {}
+	virtual void alter(struct alter_space * /* alter */) noexcept {}
 	/**
 	 * Called after the change has been successfully written
 	 * to WAL. Must not fail.
 	 */
 	virtual void commit(struct alter_space * /* alter */,
-			    int64_t /* signature */) {}
+			    int64_t /* signature */) noexcept {}
 	/**
 	 * Called in case a WAL error occurred. It is supposed to undo
 	 * the effect of AlterSpaceOp::prepare and AlterSpaceOp::alter.
 	 * Must not fail.
 	 */
-	virtual void rollback(struct alter_space * /* alter */) {}
+	virtual void rollback(struct alter_space * /* alter */) noexcept {}
 
-	virtual ~AlterSpaceOp() {}
+	virtual ~AlterSpaceOp() noexcept {}
 
 	void *operator new(size_t size)
 	{
@@ -979,7 +979,7 @@ struct mh_i32_t *AlterSpaceLock::registry;
  * Replace the old space with a new one in the space cache.
  */
 static int
-alter_space_commit(struct trigger *trigger, void *event)
+alter_space_commit(struct trigger *trigger, void *event) noexcept
 {
 	struct txn *txn = (struct txn *) event;
 	struct alter_space *alter = (struct alter_space *) trigger->data;
@@ -997,12 +997,8 @@ alter_space_commit(struct trigger *trigger, void *event)
 	 * indexes into their new places.
 	 */
 	class AlterSpaceOp *op;
-	try {
-		rlist_foreach_entry(op, &alter->ops, link)
-			op->commit(alter, signature);
-	} catch (Exception *e) {
-		return -1;
-	}
+	rlist_foreach_entry(op, &alter->ops, link)
+		op->commit(alter, signature);
 
 	alter->new_space = NULL; /* for alter_space_delete(). */
 	/*
@@ -1024,7 +1020,7 @@ alter_space_commit(struct trigger *trigger, void *event)
  * alter_space_commit() failure (unlikely)
  */
 static int
-alter_space_rollback(struct trigger *trigger, void * /* event */)
+alter_space_rollback(struct trigger *trigger, void * /* event */) noexcept
 {
 	struct alter_space *alter = (struct alter_space *) trigger->data;
 	/* Rollback alter ops */
@@ -1183,9 +1179,9 @@ alter_space_do(struct txn_stmt *stmt, struct alter_space *alter)
 class CheckSpaceFormat: public AlterSpaceOp
 {
 public:
-	CheckSpaceFormat(struct alter_space *alter)
+	explicit CheckSpaceFormat(struct alter_space *alter)
 		:AlterSpaceOp(alter) {}
-	virtual void prepare(struct alter_space *alter);
+	void prepare(struct alter_space *alter) override;
 };
 
 void
@@ -1217,15 +1213,15 @@ public:
 	 * names into an old dictionary and deletes new one.
 	 */
 	struct tuple_dictionary *new_dict;
-	virtual void alter_def(struct alter_space *alter);
-	virtual void alter(struct alter_space *alter);
-	virtual void rollback(struct alter_space *alter);
-	virtual ~ModifySpace();
+	void alter_def(struct alter_space *alter) noexcept override;
+	void alter(struct alter_space *alter) noexcept override;
+	void rollback(struct alter_space *alter) noexcept override;
+	~ModifySpace() noexcept override;
 };
 
 /** Amend the definition of the new space. */
 void
-ModifySpace::alter_def(struct alter_space *alter)
+ModifySpace::alter_def(struct alter_space *alter) noexcept
 {
 	/*
 	 * Use the old dictionary for the new space, because
@@ -1244,7 +1240,7 @@ ModifySpace::alter_def(struct alter_space *alter)
 }
 
 void
-ModifySpace::alter(struct alter_space *alter)
+ModifySpace::alter(struct alter_space *alter) noexcept
 {
 	/*
 	 * Move new names into an old dictionary, which already is
@@ -1255,12 +1251,12 @@ ModifySpace::alter(struct alter_space *alter)
 }
 
 void
-ModifySpace::rollback(struct alter_space *alter)
+ModifySpace::rollback(struct alter_space *alter) noexcept
 {
 	tuple_dictionary_swap(alter->new_space->def->dict, new_dict);
 }
 
-ModifySpace::~ModifySpace()
+ModifySpace::~ModifySpace() noexcept
 {
 	if (new_dict != NULL)
 		tuple_dictionary_unref(new_dict);
@@ -1276,9 +1272,9 @@ public:
 	DropIndex(struct alter_space *alter, struct index *index)
 		:AlterSpaceOp(alter), old_index(index) {}
 	struct index *old_index;
-	virtual void alter_def(struct alter_space *alter);
-	virtual void prepare(struct alter_space *alter);
-	virtual void commit(struct alter_space *alter, int64_t lsn);
+	void alter_def(struct alter_space *alter) noexcept override;
+	void prepare(struct alter_space *alter) override;
+	void commit(struct alter_space *alter, int64_t lsn) noexcept override;
 };
 
 /*
@@ -1286,7 +1282,7 @@ public:
  * the new index from it.
  */
 void
-DropIndex::alter_def(struct alter_space * /* alter */)
+DropIndex::alter_def(struct alter_space * /* alter */) noexcept
 {
 	rlist_del_entry(old_index->def, link);
 }
@@ -1300,7 +1296,7 @@ DropIndex::prepare(struct alter_space *alter)
 }
 
 void
-DropIndex::commit(struct alter_space *alter, int64_t signature)
+DropIndex::commit(struct alter_space *alter, int64_t signature) noexcept
 {
 	(void)alter;
 	index_commit_drop(old_index, signature);
@@ -1318,18 +1314,18 @@ public:
 		:AlterSpaceOp(alter), iid(iid_arg) {}
 	/** id of the index on the move. */
 	uint32_t iid;
-	virtual void alter(struct alter_space *alter);
-	virtual void rollback(struct alter_space *alter);
+	void alter(struct alter_space *alter) noexcept override;
+	void rollback(struct alter_space *alter) noexcept override;
 };
 
 void
-MoveIndex::alter(struct alter_space *alter)
+MoveIndex::alter(struct alter_space *alter) noexcept
 {
 	space_swap_index(alter->old_space, alter->new_space, iid, iid);
 }
 
 void
-MoveIndex::rollback(struct alter_space *alter)
+MoveIndex::rollback(struct alter_space *alter) noexcept
 {
 	space_swap_index(alter->old_space, alter->new_space, iid, iid);
 }
@@ -1360,23 +1356,23 @@ public:
 	struct index *old_index;
 	struct index *new_index;
 	struct index_def *new_index_def;
-	virtual void alter_def(struct alter_space *alter);
-	virtual void alter(struct alter_space *alter);
-	virtual void commit(struct alter_space *alter, int64_t lsn);
-	virtual void rollback(struct alter_space *alter);
-	virtual ~ModifyIndex();
+	void alter_def(struct alter_space *alter) noexcept override;
+	void alter(struct alter_space *alter) noexcept override;
+	void commit(struct alter_space *alter, int64_t lsn) noexcept override;
+	void rollback(struct alter_space *alter) noexcept override;
+	~ModifyIndex() noexcept override;
 };
 
 /** Update the definition of the new space */
 void
-ModifyIndex::alter_def(struct alter_space *alter)
+ModifyIndex::alter_def(struct alter_space *alter) noexcept
 {
 	rlist_del_entry(old_index->def, link);
 	index_def_list_add(&alter->key_list, new_index_def);
 }
 
 void
-ModifyIndex::alter(struct alter_space *alter)
+ModifyIndex::alter(struct alter_space *alter) noexcept
 {
 	new_index = space_index(alter->new_space, new_index_def->iid);
 	assert(old_index->def->iid == new_index->def->iid);
@@ -1392,14 +1388,14 @@ ModifyIndex::alter(struct alter_space *alter)
 }
 
 void
-ModifyIndex::commit(struct alter_space *alter, int64_t signature)
+ModifyIndex::commit(struct alter_space *alter, int64_t signature) noexcept
 {
 	(void)alter;
 	index_commit_modify(new_index, signature);
 }
 
 void
-ModifyIndex::rollback(struct alter_space *alter)
+ModifyIndex::rollback(struct alter_space *alter) noexcept
 {
 	/*
 	 * Restore indexes.
@@ -1411,7 +1407,7 @@ ModifyIndex::rollback(struct alter_space *alter)
 	index_update_def(old_index);
 }
 
-ModifyIndex::~ModifyIndex()
+ModifyIndex::~ModifyIndex() noexcept
 {
 	index_def_delete(new_index_def);
 }
@@ -1427,15 +1423,15 @@ public:
 	CreateIndex(struct alter_space *alter, struct index_def *def)
 		:AlterSpaceOp(alter), new_index(NULL), new_index_def(def)
 	{}
-	virtual void alter_def(struct alter_space *alter);
-	virtual void prepare(struct alter_space *alter);
-	virtual void commit(struct alter_space *alter, int64_t lsn);
-	virtual ~CreateIndex();
+	void alter_def(struct alter_space *alter) noexcept override;
+	void prepare(struct alter_space *alter) override;
+	void commit(struct alter_space *alter, int64_t lsn) noexcept override;
+	~CreateIndex() noexcept override;
 };
 
 /** Add definition of the new key to the new space def. */
 void
-CreateIndex::alter_def(struct alter_space *alter)
+CreateIndex::alter_def(struct alter_space *alter) noexcept
 {
 	index_def_list_add(&alter->key_list, new_index_def);
 }
@@ -1475,7 +1471,7 @@ CreateIndex::prepare(struct alter_space *alter)
 }
 
 void
-CreateIndex::commit(struct alter_space *alter, int64_t signature)
+CreateIndex::commit(struct alter_space *alter, int64_t signature) noexcept
 {
 	(void) alter;
 	assert(new_index != NULL);
@@ -1483,7 +1479,7 @@ CreateIndex::commit(struct alter_space *alter, int64_t signature)
 	new_index = NULL;
 }
 
-CreateIndex::~CreateIndex()
+CreateIndex::~CreateIndex() noexcept
 {
 	if (new_index != NULL)
 		index_abort_create(new_index);
@@ -1516,15 +1512,15 @@ public:
 	struct index_def *new_index_def;
 	/** Old index index_def. */
 	struct index_def *old_index_def;
-	virtual void alter_def(struct alter_space *alter);
-	virtual void prepare(struct alter_space *alter);
-	virtual void commit(struct alter_space *alter, int64_t signature);
-	virtual ~RebuildIndex();
+	void alter_def(struct alter_space *alter) noexcept override;
+	void prepare(struct alter_space *alter) override;
+	void commit(struct alter_space *alter, int64_t signature) noexcept override;
+	~RebuildIndex() noexcept override;
 };
 
 /** Add definition of the new key to the new space def. */
 void
-RebuildIndex::alter_def(struct alter_space *alter)
+RebuildIndex::alter_def(struct alter_space *alter) noexcept
 {
 	rlist_del_entry(old_index_def, link);
 	index_def_list_add(&alter->key_list, new_index_def);
@@ -1540,7 +1536,7 @@ RebuildIndex::prepare(struct alter_space *alter)
 }
 
 void
-RebuildIndex::commit(struct alter_space *alter, int64_t signature)
+RebuildIndex::commit(struct alter_space *alter, int64_t signature) noexcept
 {
 	struct index *old_index = space_index(alter->old_space,
 					      old_index_def->iid);
@@ -1551,7 +1547,7 @@ RebuildIndex::commit(struct alter_space *alter, int64_t signature)
 	new_index = NULL;
 }
 
-RebuildIndex::~RebuildIndex()
+RebuildIndex::~RebuildIndex() noexcept
 {
 	if (new_index != NULL)
 		index_abort_create(new_index);
@@ -1595,9 +1591,10 @@ public:
 	TruncateIndex(struct alter_space *alter, uint32_t iid)
 		: AlterSpaceOp(alter), iid(iid),
 		  old_index(NULL), new_index(NULL) {}
-	virtual void prepare(struct alter_space *alter);
-	virtual void commit(struct alter_space *alter, int64_t signature);
-	virtual ~TruncateIndex();
+	void prepare(struct alter_space *alter) override;
+	void commit(struct alter_space *alter,
+	            int64_t signature) noexcept override;
+	~TruncateIndex() override;
 };
 
 void
@@ -1627,7 +1624,7 @@ TruncateIndex::prepare(struct alter_space *alter)
 }
 
 void
-TruncateIndex::commit(struct alter_space *alter, int64_t signature)
+TruncateIndex::commit(struct alter_space *alter, int64_t signature) noexcept
 {
 	(void)alter;
 	index_commit_drop(old_index, signature);
@@ -1635,7 +1632,7 @@ TruncateIndex::commit(struct alter_space *alter, int64_t signature)
 	new_index = NULL;
 }
 
-TruncateIndex::~TruncateIndex()
+TruncateIndex::~TruncateIndex() noexcept
 {
 	if (new_index == NULL)
 		return;
@@ -1652,14 +1649,14 @@ class UpdateSchemaVersion: public AlterSpaceOp
 public:
 	UpdateSchemaVersion(struct alter_space * alter)
 		:AlterSpaceOp(alter) {}
-	virtual void alter(struct alter_space *alter);
+	void alter(struct alter_space *alter) noexcept override;
 };
 
 void
-UpdateSchemaVersion::alter(struct alter_space *alter)
+UpdateSchemaVersion::alter(struct alter_space *alter) noexcept
 {
-    (void)alter;
-    ++schema_version;
+	(void) alter;
+	++schema_version;
 }
 
 /**
@@ -1679,10 +1676,10 @@ public:
 	RebuildCkConstraints(struct alter_space *alter) : AlterSpaceOp(alter),
 		ck_constraint(RLIST_HEAD_INITIALIZER(ck_constraint)) {}
 	struct rlist ck_constraint;
-	virtual void prepare(struct alter_space *alter);
-	virtual void alter(struct alter_space *alter);
-	virtual void rollback(struct alter_space *alter);
-	virtual ~RebuildCkConstraints();
+	void prepare(struct alter_space *alter) override;
+	void alter(struct alter_space *alter) noexcept override;
+	void rollback(struct alter_space *alter) noexcept override;
+	~RebuildCkConstraints() override;
 };
 
 void
@@ -1711,18 +1708,18 @@ RebuildCkConstraints::space_swap_ck_constraint(struct space *old_space,
 }
 
 void
-RebuildCkConstraints::alter(struct alter_space *alter)
+RebuildCkConstraints::alter(struct alter_space *alter) noexcept
 {
 	space_swap_ck_constraint(alter->old_space, alter->new_space);
 }
 
 void
-RebuildCkConstraints::rollback(struct alter_space *alter)
+RebuildCkConstraints::rollback(struct alter_space *alter) noexcept
 {
 	space_swap_ck_constraint(alter->new_space, alter->old_space);
 }
 
-RebuildCkConstraints::~RebuildCkConstraints()
+RebuildCkConstraints::~RebuildCkConstraints() noexcept
 {
 	struct ck_constraint *old_ck_constraint, *tmp;
 	rlist_foreach_entry_safe(old_ck_constraint, &ck_constraint, link, tmp) {
@@ -1749,8 +1746,8 @@ class MoveCkConstraints: public AlterSpaceOp
 				      struct space *new_space);
 public:
 	MoveCkConstraints(struct alter_space *alter) : AlterSpaceOp(alter) {}
-	virtual void alter(struct alter_space *alter);
-	virtual void rollback(struct alter_space *alter);
+	void alter(struct alter_space *alter) noexcept override;
+	void rollback(struct alter_space *alter) noexcept override;
 };
 
 void
@@ -1764,13 +1761,13 @@ MoveCkConstraints::space_swap_ck_constraint(struct space *old_space,
 }
 
 void
-MoveCkConstraints::alter(struct alter_space *alter)
+MoveCkConstraints::alter(struct alter_space *alter) noexcept
 {
 	space_swap_ck_constraint(alter->old_space, alter->new_space);
 }
 
 void
-MoveCkConstraints::rollback(struct alter_space *alter)
+MoveCkConstraints::rollback(struct alter_space *alter) noexcept
 {
 	space_swap_ck_constraint(alter->new_space, alter->old_space);
 }
@@ -1829,11 +1826,12 @@ public:
 		if (new_id == NULL)
 			diag_raise();
 	}
-	virtual void prepare(struct alter_space *alter);
-	virtual void alter(struct alter_space *alter);
-	virtual void rollback(struct alter_space *alter);
-	virtual void commit(struct alter_space *alter, int64_t signature);
-	virtual ~CreateConstraintID();
+	void prepare(struct alter_space *alter) override;
+	void alter(struct alter_space *alter) noexcept override;
+	void rollback(struct alter_space *alter) noexcept override;
+	void commit(struct alter_space *alter,
+	            int64_t signature) noexcept override;
+	~CreateConstraintID() noexcept override;
 };
 
 void
@@ -1845,7 +1843,7 @@ CreateConstraintID::prepare(struct alter_space *alter)
 }
 
 void
-CreateConstraintID::alter(struct alter_space *alter)
+CreateConstraintID::alter(struct alter_space *alter) noexcept
 {
 	/* Alter() can't fail, so can't just throw an error. */
 	if (space_add_constraint_id(alter->old_space, new_id) != 0)
@@ -1853,14 +1851,15 @@ CreateConstraintID::alter(struct alter_space *alter)
 }
 
 void
-CreateConstraintID::rollback(struct alter_space *alter)
+CreateConstraintID::rollback(struct alter_space *alter) noexcept
 {
 	space_delete_constraint_id(alter->new_space, new_id->name);
 	new_id = NULL;
 }
 
 void
-CreateConstraintID::commit(struct alter_space *alter, int64_t signature)
+CreateConstraintID::commit(struct alter_space *alter,
+                           int64_t signature) noexcept
 {
 	(void) alter;
 	(void) signature;
@@ -1871,7 +1870,7 @@ CreateConstraintID::commit(struct alter_space *alter, int64_t signature)
 	new_id = NULL;
 }
 
-CreateConstraintID::~CreateConstraintID()
+CreateConstraintID::~CreateConstraintID() noexcept
 {
 	if (new_id != NULL)
 		constraint_id_delete(new_id);
@@ -1886,19 +1885,20 @@ public:
 	DropConstraintID(struct alter_space *alter, const char *name)
 		:AlterSpaceOp(alter), old_id(NULL), name(name)
 	{}
-	virtual void alter(struct alter_space *alter);
-	virtual void commit(struct alter_space *alter , int64_t signature);
-	virtual void rollback(struct alter_space *alter);
+	void alter(struct alter_space *alter) noexcept override;
+	void commit(struct alter_space *alter,
+	            int64_t signature) noexcept override;
+	void rollback(struct alter_space *alter) noexcept override;
 };
 
 void
-DropConstraintID::alter(struct alter_space *alter)
+DropConstraintID::alter(struct alter_space *alter) noexcept
 {
 	old_id = space_pop_constraint_id(alter->old_space, name);
 }
 
 void
-DropConstraintID::commit(struct alter_space *alter, int64_t signature)
+DropConstraintID::commit(struct alter_space *alter, int64_t signature) noexcept
 {
 	(void) alter;
 	(void) signature;
@@ -1906,7 +1906,7 @@ DropConstraintID::commit(struct alter_space *alter, int64_t signature)
 }
 
 void
-DropConstraintID::rollback(struct alter_space *alter)
+DropConstraintID::rollback(struct alter_space *alter) noexcept
 {
 	if (space_add_constraint_id(alter->new_space, old_id) != 0) {
 		panic("Can't recover after constraint drop rollback (out of "
