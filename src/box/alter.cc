@@ -1025,12 +1025,8 @@ alter_space_rollback(struct trigger *trigger, void * /* event */) noexcept
 	struct alter_space *alter = (struct alter_space *) trigger->data;
 	/* Rollback alter ops */
 	class AlterSpaceOp *op;
-	try {
-		rlist_foreach_entry(op, &alter->ops, link) {
-			op->rollback(alter);
-		}
-	} catch (Exception *e) {
-		return -1;
+	rlist_foreach_entry(op, &alter->ops, link) {
+		op->rollback(alter);
 	}
 	/* Rebuild index maps once for all indexes. */
 	space_fill_index_map(alter->old_space);
@@ -1965,7 +1961,7 @@ on_create_space_rollback(struct trigger *trigger, void *event)
  */
 int
 alter_space_move_indexes(struct alter_space *alter, uint32_t begin,
-			 uint32_t end)
+			 uint32_t end) try
 {
 	struct space *old_space = alter->old_space;
 	bool is_min_field_count_changed;
@@ -1988,17 +1984,9 @@ alter_space_move_indexes(struct alter_space *alter, uint32_t begin,
 				new_def = index_def_dup(old_def);
 				index_def_update_optionality(new_def,
 							     min_field_count);
-				try {
-					(void) new ModifyIndex(alter, old_index, new_def);
-				} catch (Exception *e) {
-					return -1;
-				}
+				(void) new ModifyIndex(alter, old_index, new_def);
 			} else {
-				try {
-					(void) new MoveIndex(alter, old_def->iid);
-				} catch (Exception *e) {
-					return -1;
-				}
+				(void) new MoveIndex(alter, old_def->iid);
 			}
 			continue;
 		}
@@ -2013,20 +2001,14 @@ alter_space_move_indexes(struct alter_space *alter, uint32_t begin,
 		index_def_update_optionality(new_def, min_field_count);
 		auto guard = make_scoped_guard([=] { index_def_delete(new_def); });
 		if (!index_def_change_requires_rebuild(old_index, new_def))
-			try {
-				(void) new ModifyIndex(alter, old_index, new_def);
-			} catch (Exception *e) {
-				return -1;
-			}
+			(void) new ModifyIndex(alter, old_index, new_def);
 		else
-			try {
-				(void) new RebuildIndex(alter, new_def, old_def);
-			} catch (Exception *e) {
-				return -1;
-			}
+			(void) new RebuildIndex(alter, new_def, old_def);
 		guard.is_active = false;
 	}
 	return 0;
+} catch (Exception *) {
+	return -1;
 }
 
 /**
@@ -2189,7 +2171,7 @@ on_drop_view_rollback(struct trigger *trigger, void *event)
  * clumsy, so it is simply not done.
  */
 static int
-on_replace_dd_space(struct trigger * /* trigger */, void *event)
+on_replace_dd_space(struct trigger * /* trigger */, void *event) try
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -2469,28 +2451,23 @@ on_replace_dd_space(struct trigger * /* trigger */, void *event)
 						     old_space->index_count,
 						     def->fields,
 						     def->field_count);
-		try {
-			(void) new CheckSpaceFormat(alter);
-			(void) new ModifySpace(alter, def);
-			(void) new RebuildCkConstraints(alter);
-		} catch (Exception *e) {
-			return -1;
-		}
+		(void) new CheckSpaceFormat(alter);
+		(void) new ModifySpace(alter, def);
+		(void) new RebuildCkConstraints(alter);
 		def_guard.is_active = false;
 		/* Create MoveIndex ops for all space indexes. */
 		if (alter_space_move_indexes(alter, 0,
 		    old_space->index_id_max + 1) != 0)
 			return -1;
-		try {
-			/* Remember to update schema_version. */
-			(void) new UpdateSchemaVersion(alter);
-			alter_space_do(stmt, alter);
-		} catch (Exception *e) {
-			return -1;
-		}
+
+		/* Remember to update schema_version. */
+		(void) new UpdateSchemaVersion(alter);
+		alter_space_do(stmt, alter);
 		alter_guard.is_active = false;
 	}
 	return 0;
+} catch (Exception *) {
+	return -1;
 }
 
 /**
@@ -2552,7 +2529,7 @@ index_is_used_by_fk_constraint(struct rlist *fk_list, uint32_t iid)
  *   are modified.
  */
 static int
-on_replace_dd_index(struct trigger * /* trigger */, void *event)
+on_replace_dd_index(struct trigger * /* trigger */, void *event) try
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -2653,15 +2630,12 @@ on_replace_dd_index(struct trigger * /* trigger */, void *event)
 		}
 		if (alter_space_move_indexes(alter, 0, iid) != 0)
 			return -1;
-		try {
-			if (old_index->def->opts.is_unique) {
-				(void) new DropConstraintID(alter,
-							    old_def->name);
-			}
-			(void) new DropIndex(alter, old_index);
-		} catch (Exception *e) {
-			return -1;
+
+		if (old_index->def->opts.is_unique) {
+			(void) new DropConstraintID(alter,
+						    old_def->name);
 		}
+		(void) new DropIndex(alter, old_index);
 	}
 	/* Case 2: create an index, if it is simply created. */
 	if (old_index == NULL && new_tuple != NULL) {
@@ -2672,17 +2646,14 @@ on_replace_dd_index(struct trigger * /* trigger */, void *event)
 		if (def == NULL)
 			return -1;
 		index_def_update_optionality(def, alter->new_min_field_count);
-		try {
-			if (def->opts.is_unique) {
-				(void) new CreateConstraintID(
-					alter, iid == 0 ? CONSTRAINT_TYPE_PK :
-					CONSTRAINT_TYPE_UNIQUE, def->name);
-			}
-			(void) new CreateIndex(alter, def);
-		} catch (Exception *e) {
-			index_def_delete(def);
-			return -1;
+		auto guard = make_scoped_guard([=] { index_def_delete(def); });
+		if (def->opts.is_unique) {
+			(void) new CreateConstraintID(
+				alter, iid == 0 ? CONSTRAINT_TYPE_PK :
+				CONSTRAINT_TYPE_UNIQUE, def->name);
 		}
+		(void) new CreateIndex(alter, def);
+		guard.is_active = false;
 	}
 	/* Case 3 and 4: check if we need to rebuild index data. */
 	if (old_index != NULL && new_tuple != NULL) {
@@ -2707,18 +2678,14 @@ on_replace_dd_index(struct trigger * /* trigger */, void *event)
 			do_new_constraint_id = true;
 			do_drop_constraint_id = true;
 		}
-		try {
-			if (do_new_constraint_id) {
-				(void) new CreateConstraintID(
-					alter, CONSTRAINT_TYPE_UNIQUE,
-					index_def->name);
-			}
-			if (do_drop_constraint_id) {
-				(void) new DropConstraintID(alter,
-							    old_def->name);
-			}
-		} catch (Exception *e) {
-			return -1;
+		if (do_new_constraint_id) {
+			(void) new CreateConstraintID(
+				alter, CONSTRAINT_TYPE_UNIQUE,
+				index_def->name);
+		}
+		if (do_drop_constraint_id) {
+			(void) new DropConstraintID(alter,
+						    old_def->name);
 		}
 		/*
 		 * To detect which key parts are optional,
@@ -2764,11 +2731,7 @@ on_replace_dd_index(struct trigger * /* trigger */, void *event)
 			return -1;
 		if (index_def_cmp(index_def, old_index->def) == 0) {
 			/* Index is not changed so just move it. */
-			try {
-				(void) new MoveIndex(alter, old_index->def->iid);
-			} catch (Exception *e) {
-				return -1;
-			}
+			(void) new MoveIndex(alter, old_index->def->iid);
 
 		} else if (index_def_change_requires_rebuild(old_index,
 							     index_def)) {
@@ -2782,12 +2745,8 @@ on_replace_dd_index(struct trigger * /* trigger */, void *event)
 			/*
 			 * Operation demands an index rebuild.
 			 */
-			try {
-				(void) new RebuildIndex(alter, index_def,
-							old_index->def);
-			} catch (Exception *e) {
-				return -1;
-			}
+			(void) new RebuildIndex(alter, index_def,
+						old_index->def);
 			index_def_guard.is_active = false;
 		} else {
 			/*
@@ -2795,12 +2754,8 @@ on_replace_dd_index(struct trigger * /* trigger */, void *event)
 			 * but we still need to check that tuples stored
 			 * in the space conform to the new format.
 			 */
-			try {
-				(void) new CheckSpaceFormat(alter);
-				(void) new ModifyIndex(alter, old_index, index_def);
-			} catch (Exception *e) {
-				return -1;
-			}
+			(void) new CheckSpaceFormat(alter);
+			(void) new ModifyIndex(alter, old_index, index_def);
 			index_def_guard.is_active = false;
 		}
 	}
@@ -2810,16 +2765,14 @@ on_replace_dd_index(struct trigger * /* trigger */, void *event)
 	 */
 	if (alter_space_move_indexes(alter, iid + 1, old_space->index_id_max + 1) != 0)
 		return -1;
-	try {
-		(void) new MoveCkConstraints(alter);
-		/* Add an op to update schema_version on commit. */
-		(void) new UpdateSchemaVersion(alter);
-		alter_space_do(stmt, alter);
-	} catch (Exception *e) {
-		return -1;
-	}
+	(void) new MoveCkConstraints(alter);
+	/* Add an op to update schema_version on commit. */
+	(void) new UpdateSchemaVersion(alter);
+	alter_space_do(stmt, alter);
 	scoped_guard.is_active = false;
 	return 0;
+} catch (Exception *) {
+	return -1;
 }
 
 /**
@@ -2834,7 +2787,7 @@ on_replace_dd_index(struct trigger * /* trigger */, void *event)
  * rollback of all transactions following this one.
  */
 static int
-on_replace_dd_truncate(struct trigger * /* trigger */, void *event)
+on_replace_dd_truncate(struct trigger * /* trigger */, void *event) try
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -2893,22 +2846,20 @@ on_replace_dd_truncate(struct trigger * /* trigger */, void *event)
 		stmt->row->group_id = GROUP_LOCAL;
 	}
 
-	try {
-		/*
-		 * Recreate all indexes of the truncated space.
-		 */
-		for (uint32_t i = 0; i < old_space->index_count; i++) {
-			struct index *old_index = old_space->index[i];
-			(void) new TruncateIndex(alter, old_index->def->iid);
-		}
-
-		(void) new MoveCkConstraints(alter);
-		alter_space_do(stmt, alter);
-	} catch (Exception *e) {
-		return -1;
+	/*
+	 * Recreate all indexes of the truncated space.
+	 */
+	for (uint32_t i = 0; i < old_space->index_count; i++) {
+		struct index *old_index = old_space->index[i];
+		(void) new TruncateIndex(alter, old_index->def->iid);
 	}
+
+	(void) new MoveCkConstraints(alter);
+	alter_space_do(stmt, alter);
 	scoped_guard.is_active = false;
 	return 0;
+} catch (Exception *) {
+	return -1;
 }
 
 /* {{{ access control */
@@ -3091,7 +3042,7 @@ user_cache_remove_user(struct trigger *trigger, void * /* event */)
 }
 
 static int
-user_cache_alter_user(struct trigger *trigger, void * /* event */)
+user_cache_alter_user(struct trigger *trigger, void * /* event */) try
 {
 	struct tuple *tuple = (struct tuple *)trigger->data;
 	struct user_def *user = user_def_new_from_tuple(tuple);
@@ -3099,20 +3050,18 @@ user_cache_alter_user(struct trigger *trigger, void * /* event */)
 		return -1;
 	auto def_guard = make_scoped_guard([=] { free(user); });
 	/* Can throw if, e.g. too many users. */
-	try {
-		user_cache_replace(user);
-	} catch (Exception *e) {
-		return -1;
-	}
+	user_cache_replace(user);
 	def_guard.is_active = false;
 	return 0;
+} catch (Exception *) {
+	return -1;
 }
 
 /**
  * A trigger invoked on replace in the user table.
  */
 static int
-on_replace_dd_user(struct trigger * /* trigger */, void *event)
+on_replace_dd_user(struct trigger * /* trigger */, void *event) try
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -3132,11 +3081,7 @@ on_replace_dd_user(struct trigger * /* trigger */, void *event)
 				 PRIV_C) != 0)
 			return -1;
 		auto def_guard = make_scoped_guard([=] { free(user); });
-		try {
-			(void) user_cache_replace(user);
-		} catch (Exception *e) {
-			return -1;
-		}
+		(void) user_cache_replace(user);
 		def_guard.is_active = false;
 		struct trigger *on_rollback =
 			txn_alter_trigger_new(user_cache_remove_user, new_tuple);
@@ -3188,11 +3133,7 @@ on_replace_dd_user(struct trigger * /* trigger */, void *event)
 				 old_user->def->type, PRIV_A) != 0)
 			return -1;
 		auto def_guard = make_scoped_guard([=] { free(user); });
-		try {
-			user_cache_replace(user);
-		} catch (Exception *e) {
-			return -1;
-		}
+		user_cache_replace(user);
 		def_guard.is_active = false;
 		struct trigger *on_rollback =
 			txn_alter_trigger_new(user_cache_alter_user, old_tuple);
@@ -3201,6 +3142,8 @@ on_replace_dd_user(struct trigger * /* trigger */, void *event)
 		txn_stmt_on_rollback(stmt, on_rollback);
 	}
 	return 0;
+} catch (Exception *) {
+	return -1;
 }
 
 /**
@@ -4171,7 +4114,7 @@ on_replace_dd_schema(struct trigger * /* trigger */, void *event)
  * with it.
  */
 static int
-register_replica(struct trigger *trigger, void * /* event */)
+register_replica(struct trigger *trigger, void * /* event */) try
 {
 	struct tuple *new_tuple = (struct tuple *)trigger->data;
 	uint32_t id;
@@ -4184,14 +4127,13 @@ register_replica(struct trigger *trigger, void * /* event */)
 	if (replica != NULL) {
 		replica_set_id(replica, id);
 	} else {
-		try {
-			replica = replicaset_add(id, &uuid);
-			/* Can't throw exceptions from on_commit trigger */
-		} catch(Exception *e) {
-			panic("Can't register replica: %s", e->errmsg);
-		}
+		replica = replicaset_add(id, &uuid);
 	}
 	return 0;
+} catch(Exception *e) {
+	/* Can't throw exceptions from on_commit trigger */
+	panic("Can't register replica: %s", e->errmsg);
+	return -1;
 }
 
 static int
@@ -5760,7 +5702,7 @@ on_replace_dd_ck_constraint(struct trigger * /* trigger*/, void *event)
 
 /** A trigger invoked on replace in the _func_index space. */
 static int
-on_replace_dd_func_index(struct trigger *trigger, void *event)
+on_replace_dd_func_index(struct trigger *trigger, void *event) try
 {
 	(void) trigger;
 	struct txn *txn = (struct txn *) event;
@@ -5839,24 +5781,18 @@ on_replace_dd_func_index(struct trigger *trigger, void *event)
 	auto scoped_guard = make_scoped_guard([=] {alter_space_delete(alter);});
 	if (alter_space_move_indexes(alter, 0, index->def->iid) != 0)
 		return -1;
-	try {
-		(void) new RebuildFuncIndex(alter, index->def, func);
-	} catch (Exception *e) {
-		return -1;
-	}
+	(void) new RebuildFuncIndex(alter, index->def, func);
 	if (alter_space_move_indexes(alter, index->def->iid + 1,
 				     space->index_id_max + 1) != 0)
 		return -1;
-	try {
-		(void) new MoveCkConstraints(alter);
-		(void) new UpdateSchemaVersion(alter);
-		alter_space_do(stmt, alter);
-	} catch (Exception *e) {
-		return -1;
-	}
+	(void) new MoveCkConstraints(alter);
+	(void) new UpdateSchemaVersion(alter);
+	alter_space_do(stmt, alter);
 
 	scoped_guard.is_active = false;
 	return 0;
+} catch (Exception *e) {
+	return -1;
 }
 
 struct trigger alter_space_on_replace_space = {
