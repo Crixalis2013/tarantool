@@ -412,13 +412,13 @@ test:do_execsql_test(
         -- </func-4.4.1>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-4.4.2",
     [[
         SELECT abs(t1) FROM tbl1
     ]], {
         -- <func-4.4.2>
-        0.0, 0.0, 0.0, 0.0, 0.0
+        1, "Type mismatch: can not convert this to number"
         -- </func-4.4.2>
     })
 
@@ -502,13 +502,13 @@ test:do_execsql_test(
         -- </func-4.12>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-4.13",
     [[
         SELECT round(t1,2) FROM tbl1
     ]], {
         -- <func-4.13>
-        0.0, 0.0, 0.0, 0.0, 0.0
+        1, "Type mismatch: can not convert this to double"
         -- </func-4.13>
     })
 
@@ -908,7 +908,7 @@ test:do_execsql_test(
                             UNION ALL SELECT -9223372036854775807)
     ]], {
         -- <func-8.6>
-        "integer"
+        "double"
         -- </func-8.6>
     })
 
@@ -919,7 +919,7 @@ test:do_execsql_test(
                             UNION ALL SELECT -9223372036854775807)
     ]], {
         -- <func-8.7>
-        "integer"
+        "double"
         -- </func-8.7>
     })
 
@@ -982,14 +982,14 @@ test:do_execsql_test(
         -- </func-9.4>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-9.5",
     [[
         SELECT length(randomblob(32)), length(randomblob(-5)),
                length(randomblob(2000))
     ]], {
         -- <func-9.5>
-        32, "", 2000
+        1, "Type mismatch: can not convert -5 to unsigned"
         -- </func-9.5>
     })
 
@@ -2918,7 +2918,7 @@ test:do_catchsql_test(
         SELECT ROUND(X'FF')
     ]], {
         -- <func-76.1>
-        1, "Type mismatch: can not convert varbinary to numeric"
+        1, "Type mismatch: can not convert varbinary to double"
         -- </func-76.1>
     })
 
@@ -2928,17 +2928,17 @@ test:do_catchsql_test(
         SELECT RANDOMBLOB(X'FF')
     ]], {
         -- <func-76.2>
-        1, "Type mismatch: can not convert varbinary to numeric"
+        1, "Type mismatch: can not convert varbinary to unsigned"
         -- </func-76.2>
     })
 
-test:do_catchsql_test(
+test:do_execsql_test(
     "func-76.3",
     [[
         SELECT SOUNDEX(X'FF')
     ]], {
         -- <func-76.3>
-        1, "Type mismatch: can not convert varbinary to text"
+        "?000"
         -- </func-76.3>
     })
 

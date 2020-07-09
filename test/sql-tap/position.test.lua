@@ -225,20 +225,20 @@ test:do_test(
 test:do_test(
     "position-1.23",
     function()
-        return test:catchsql "SELECT position(34, 12345);"
+        return test:execsql "SELECT position(34, 12345);"
     end, {
         -- <position-1.23>
-        1, "Inconsistent types: expected text or varbinary got unsigned"
+        3
         -- </position-1.23>
     })
 
 test:do_test(
     "position-1.24",
     function()
-        return test:catchsql "SELECT position(34, 123456.78);"
+        return test:execsql "SELECT position(34, 123456.78);"
     end, {
         -- <position-1.24>
-        1, "Inconsistent types: expected text or varbinary got real"
+        3
         -- </position-1.24>
     })
 
@@ -248,7 +248,7 @@ test:do_test(
         return test:catchsql "SELECT position(x'3334', 123456.78);"
     end, {
         -- <position-1.25>
-        1, "Inconsistent types: expected text or varbinary got real"
+        1, "Inconsistent types: expected varbinary got text"
         -- </position-1.25>
     })
 

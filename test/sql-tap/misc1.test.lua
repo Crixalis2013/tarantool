@@ -176,7 +176,7 @@ test:do_test(
     "misc1-2.1",
     function()
         test:execsql([[
-            CREATE TABLE agger(one text primary key, two text, three text, four text);
+            CREATE TABLE agger(one int primary key, two text, three text, four text);
             START TRANSACTION;
             INSERT INTO agger VALUES(1, 'one', 'hello', 'yes');
             INSERT INTO agger VALUES(2, 'two', 'howdy', 'no');

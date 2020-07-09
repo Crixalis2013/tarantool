@@ -214,18 +214,22 @@ box.execute("INSERT INTO t1 VALUES (randomblob(5));")
 ...
 box.execute("SELECT * FROM t1 WHERE s LIKE 'blob';")
 ---
-- null
-- 'Inconsistent types: expected text got varbinary'
+- metadata:
+  - name: S
+    type: scalar
+  rows: []
 ...
 box.execute("SELECT * FROM t1 WHERE 'blob' LIKE s;")
 ---
 - null
-- 'Inconsistent types: expected text got varbinary'
+- 'Failed to execute SQL statement: LIKE pattern can only contain UTF-8 characters'
 ...
 box.execute("SELECT * FROM t1 WHERE 'blob' LIKE x'0000';")
 ---
-- null
-- 'Inconsistent types: expected text got varbinary'
+- metadata:
+  - name: S
+    type: scalar
+  rows: []
 ...
 box.execute("SELECT s LIKE NULL FROM t1;")
 ---
@@ -245,13 +249,17 @@ box.execute("INSERT INTO t1 VALUES (1);")
 ...
 box.execute("SELECT * FROM t1 WHERE s LIKE 'int';")
 ---
-- null
-- 'Inconsistent types: expected text got unsigned'
+- metadata:
+  - name: S
+    type: scalar
+  rows: []
 ...
 box.execute("SELECT * FROM t1 WHERE 'int' LIKE 4;")
 ---
-- null
-- 'Inconsistent types: expected text got unsigned'
+- metadata:
+  - name: S
+    type: scalar
+  rows: []
 ...
 box.execute("SELECT NULL LIKE s FROM t1;")
 ---
@@ -1315,18 +1323,24 @@ box.execute("SELECT group_concat(v) FROM t;")
 ...
 box.execute("SELECT lower(v) FROM t;")
 ---
-- null
-- 'Inconsistent types: expected text got varbinary'
+- metadata:
+  - name: lower(v)
+    type: string
+  rows:
+  - ['abc']
 ...
 box.execute("SELECT upper(v) FROM t;")
 ---
-- null
-- 'Inconsistent types: expected text got varbinary'
+- metadata:
+  - name: upper(v)
+    type: string
+  rows:
+  - ['ABC']
 ...
 box.execute("SELECT abs(v) FROM t;")
 ---
 - null
-- 'Inconsistent types: expected number got varbinary'
+- 'Type mismatch: can not convert varbinary to number'
 ...
 box.execute("SELECT typeof(v) FROM t;")
 ---

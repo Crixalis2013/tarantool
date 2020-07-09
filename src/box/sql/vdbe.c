@@ -372,6 +372,8 @@ mem_apply_type(struct Mem *record, enum field_type type)
 		    (record->flags & (MEM_Real | MEM_Int | MEM_UInt)) != 0)
 			sqlVdbeMemStringify(record);
 		record->flags &= ~(MEM_Real | MEM_Int | MEM_UInt);
+		if ((record->flags & MEM_Bool) == MEM_Bool)
+			return -1;
 		return 0;
 	case FIELD_TYPE_VARBINARY:
 		if ((record->flags & MEM_Blob) == 0)
@@ -2744,7 +2746,7 @@ case OP_Fetch: {
 	break;
 }
 
-/* Opcode: ApplyType P1 P2 * P4 *
+/* Opcode: ApplyType P1 P2 * P4 P5
  * Synopsis: type(r[P1@P2])
  *
  * Apply types to a range of P2 registers starting with P1.
@@ -2752,6 +2754,9 @@ case OP_Fetch: {
  * P4 is a string that is P2 characters long. The nth character of the
  * string indicates the column type that should be used for the nth
  * memory cell in the range.
+ *
+ * If P5 contains the OPFLAG_BLOB_LIKE_STRING flag, the BLOB
+ * values ​​are processed as if they had the field type STRING.
  */
 case OP_ApplyType: {
 	enum field_type *types = pOp->p4.types;
@@ -2762,6 +2767,13 @@ case OP_ApplyType: {
 	while((type = *(types++)) != field_type_MAX) {
 		assert(pIn1 <= &p->aMem[(p->nMem+1 - p->nCursor)]);
 		assert(memIsValid(pIn1));
+		if ((pOp->p5 & OPFLAG_BLOB_LIKE_STRING) != 0) {
+			if (type == FIELD_TYPE_STRING &&
+			    mem_mp_type(pIn1) == MP_BIN) {
+				pIn1++;
+				continue;
+			}
+		}
 		if (mem_apply_type(pIn1, type) != 0) {
 			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 				 sql_value_to_diag_str(pIn1),

@@ -265,6 +265,8 @@
 #include <assert.h>
 #include <stddef.h>
 
+struct sql_func_args;
+
 typedef long long int sql_int64;
 typedef unsigned long long int sql_uint64;
 typedef sql_int64 sql_int64;
@@ -2307,6 +2309,8 @@ struct Parse {
 #define OPFLAG_SYSTEMSP      0x20	/* OP_Open**: set if space pointer
 					 * points to system space.
 					 */
+/** OP_ApplyType: Treat BLOB as STRING. */
+#define OPFLAG_BLOB_LIKE_STRING		0x01
 
 /**
  * Prepare vdbe P5 flags for OP_{IdxInsert, IdxReplace, Update}
@@ -3881,6 +3885,20 @@ sql_index_type_str(struct sql *db, const struct index_def *idx_def);
 void
 sql_emit_table_types(struct Vdbe *v, struct space_def *def, int reg);
 
+/**
+ * Code an OP_ApplyType opcode that will force types for given
+ * range of register starting from @reg. These values then will be
+ * used as arguments of a function.
+ *
+ * @param vdbe VDBE.
+ * @param args Information about arguments of the function.
+ * @param reg Register where types will be placed.
+ * @param argc Number of arguments.
+ */
+void
+sql_emit_func_types(struct Vdbe *vdbe, struct sql_func_args *args, int reg,
+		    uint32_t argc);
+
 enum field_type
 sql_type_result(enum field_type lhs, enum field_type rhs);
 
@@ -4406,6 +4424,20 @@ struct sql_func_args {
 	uint32_t min_count;
 	/** Max number of arguments. */
 	uint32_t max_count;
+	/**
+	 * In case the function arguments may not be of the same
+	 * type, all these types are described here.
+	 */
+	enum field_type *types;
+	/**
+	 * Contains the type of arguments if all arguments to the
+	 * function are of the same type.
+	 */
+	enum field_type recurrent_type;
+	/**
+	 * True if the function should treat the BLOB as STRING.
+	 */
+	bool is_blob_like_str;
 };
 
 struct func_sql_builtin {
