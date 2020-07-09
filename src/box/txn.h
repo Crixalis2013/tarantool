@@ -368,6 +368,10 @@ struct txm_story {
 	 */
 	struct rlist in_all_stories;
 	/**
+	 * Link in space::txm_stories.
+	 */
+	struct rlist in_space_stories;
+	/**
 	 * Number of indexes in this space - and the count of link[].
 	 */
 	uint32_t index_count;

@@ -210,6 +210,7 @@ space_create(struct space *space, struct engine *engine,
 			 "constraint_ids");
 		goto fail;
 	}
+	rlist_create(&space->txm_stories);
 	return 0;
 
 fail_free_indexes:
@@ -277,6 +278,7 @@ space_delete(struct space *space)
 	assert(rlist_empty(&space->child_fk_constraint));
 	assert(rlist_empty(&space->ck_constraint));
 	space->vtab->destroy(space);
+	rlist_del(&space->txm_stories);
 }
 
 void

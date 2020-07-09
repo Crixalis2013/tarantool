@@ -679,7 +679,6 @@ txn_prepare(struct txn *txn)
 		rlist_del(&entry->in_conflicted_by_list);
 	}
 
-
 	trigger_clear(&txn->fiber_on_stop);
 	if (!txn_has_flag(txn, TXN_CAN_YIELD))
 		trigger_clear(&txn->fiber_on_yield);
@@ -1179,6 +1178,7 @@ txm_story_new(struct space *space, struct tuple *tuple)
 	story->del_psn = 0;
 	rlist_create(&story->reader_list);
 	rlist_add(&txm.all_stories, &story->in_all_stories);
+	rlist_add(&space->txm_stories, &story->in_space_stories);
 	memset(story->link, 0, sizeof(story->link[0]) * index_count);
 	return story;
 }
@@ -1804,6 +1804,7 @@ txm_story_delete(struct txm_story *story)
 	if (txm.traverse_all_stories == &story->in_all_stories)
 		txm.traverse_all_stories = rlist_next(txm.traverse_all_stories);
 	rlist_del(&story->in_all_stories);
+	rlist_del(&story->in_space_stories);
 
 	mh_int_t pos = mh_history_find(txm.history, story->tuple, 0);
 	assert(pos != mh_end(txm.history));
