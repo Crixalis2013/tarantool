@@ -2899,7 +2899,7 @@ case OP_Fetch: {
 	break;
 }
 
-/* Opcode: ImplicitCast P1 P2 * P4 *
+/* Opcode: ImplicitCast P1 P2 * P4 P5
  * Synopsis: type(r[P1@P2])
  *
  * Check that types of P2 registers starting from register
@@ -2907,7 +2907,9 @@ case OP_Fetch: {
  * If the MEM_type of the value and the given type are
  * incompatible according to field_mp_plain_type_is_compatible(),
  * but both are numeric, this opcode attempts to convert the value
- * to the type.
+ * to the type. In case P5 contains OPFLAG_BLOB_LIKE_STRING flag,
+ * values of MEM_type BLOB treated as values of field type
+ * STRING.
  */
 case OP_ImplicitCast: {
 	enum field_type *types = pOp->p4.types;
@@ -2920,6 +2922,11 @@ case OP_ImplicitCast: {
 		assert(memIsValid(pIn1));
 		if (mem_is_type_compatible(pIn1, type))
 			continue;
+		if ((pOp->p5 & OPFLAG_BLOB_LIKE_STRING) != 0) {
+			if (type == FIELD_TYPE_STRING &&
+			    mem_mp_type(pIn1) == MP_BIN)
+				continue;
+		}
 		if (!mp_type_is_numeric(mem_mp_type(pIn1)) ||
 		    !sql_type_is_numeric(type) ||
 		    mem_convert_to_numeric(pIn1, type, false) != 0) {

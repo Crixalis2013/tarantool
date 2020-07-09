@@ -265,6 +265,8 @@
 #include <assert.h>
 #include <stddef.h>
 
+struct sql_func_args;
+
 typedef long long int sql_int64;
 typedef unsigned long long int sql_uint64;
 typedef sql_int64 sql_int64;
@@ -2307,6 +2309,8 @@ struct Parse {
 #define OPFLAG_SYSTEMSP      0x20	/* OP_Open**: set if space pointer
 					 * points to system space.
 					 */
+/** OP_ImplicitCast: Treat BLOB as STRING. */
+#define OPFLAG_BLOB_LIKE_STRING		0x10
 
 /**
  * Prepare vdbe P5 flags for OP_{IdxInsert, IdxReplace, Update}
@@ -3863,6 +3867,10 @@ int sqlVarintLen(u64 v);
  */
 void
 sql_emit_table_types(struct Vdbe *v, struct space_def *def, int reg);
+
+void
+sql_emit_func_types(struct Vdbe *vdbe, struct sql_func_args *args, int reg,
+		    uint32_t argc);
 
 enum field_type
 sql_type_result(enum field_type lhs, enum field_type rhs);

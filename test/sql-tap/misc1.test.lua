@@ -176,14 +176,14 @@ test:do_test(
     "misc1-2.1",
     function()
         test:execsql([[
-            CREATE TABLE agger(one text primary key, two text, three text, four text);
+            CREATE TABLE agger(one int primary key, two text, three text, four text);
             START TRANSACTION;
-            INSERT INTO agger VALUES('1', 'one', 'hello', 'yes');
-            INSERT INTO agger VALUES('2', 'two', 'howdy', 'no');
-            INSERT INTO agger VALUES('3', 'thr', 'howareya', 'yes');
-            INSERT INTO agger VALUES('4', 'two', 'lothere', 'yes');
-            INSERT INTO agger VALUES('5', 'one', 'atcha', 'yes');
-            INSERT INTO agger VALUES('6', 'two', 'hello', 'no');
+            INSERT INTO agger VALUES(1, 'one', 'hello', 'yes');
+            INSERT INTO agger VALUES(2, 'two', 'howdy', 'no');
+            INSERT INTO agger VALUES(3, 'thr', 'howareya', 'yes');
+            INSERT INTO agger VALUES(4, 'two', 'lothere', 'yes');
+            INSERT INTO agger VALUES(5, 'one', 'atcha', 'yes');
+            INSERT INTO agger VALUES(6, 'two', 'hello', 'no');
             COMMIT
         ]])
         return test:execsql("SELECT count(*) FROM agger")

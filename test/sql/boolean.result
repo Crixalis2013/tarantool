@@ -276,29 +276,17 @@ SELECT is_boolean('true');
 SELECT abs(a) FROM t0;
  | ---
  | - null
- | - 'Inconsistent types: expected number got boolean'
+ | - 'Type mismatch: can not convert ''FALSE'' (type: boolean) to number'
  | ...
 SELECT lower(a) FROM t0;
  | ---
- | - metadata:
- |   - name: lower(a)
- |     type: string
- |   rows:
- |   - ['false']
- |   - ['true']
- |   - [null]
- |   - [null]
+ | - null
+ | - 'Type mismatch: can not convert ''FALSE'' (type: boolean) to string'
  | ...
 SELECT upper(a) FROM t0;
  | ---
- | - metadata:
- |   - name: upper(a)
- |     type: string
- |   rows:
- |   - ['FALSE']
- |   - ['TRUE']
- |   - [null]
- |   - [null]
+ | - null
+ | - 'Type mismatch: can not convert ''FALSE'' (type: boolean) to string'
  | ...
 SELECT quote(a) FROM t0;
  | ---
@@ -314,14 +302,8 @@ SELECT quote(a) FROM t0;
 -- gh-4462: LENGTH didn't take BOOLEAN arguments.
 SELECT length(a) FROM t0;
  | ---
- | - metadata:
- |   - name: length(a)
- |     type: integer
- |   rows:
- |   - [5]
- |   - [4]
- |   - [null]
- |   - [null]
+ | - null
+ | - 'Type mismatch: can not convert ''FALSE'' (type: boolean) to string'
  | ...
 SELECT typeof(a) FROM t0;
  | ---

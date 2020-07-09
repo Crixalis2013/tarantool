@@ -92,13 +92,13 @@ test:do_execsql_test(
         -- </func-1.3>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-1.4",
     [[
         SELECT coalesce(length(a),-1) FROM t2
     ]], {
         -- <func-1.4>
-        1, -1, 3, -1, 5
+        1, "Type mismatch: can not convert '1' (type: unsigned) to string"
         -- </func-1.4>
     })
 
@@ -194,23 +194,23 @@ test:do_execsql_test(
         -- </func-2.8>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-2.9",
     [[
         SELECT substr(a,1,1) FROM t2
     ]], {
         -- <func-2.9>
-        "1", "", "3", "", "6"
+        1, "Type mismatch: can not convert '1' (type: unsigned) to string"
         -- </func-2.9>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-2.10",
     [[
         SELECT substr(a,2,2) FROM t2
     ]], {
         -- <func-2.10>
-        "", "", "45", "", "78"
+        1, "Type mismatch: can not convert '1' (type: unsigned) to string"
         -- </func-2.10>
     })
 
@@ -412,13 +412,13 @@ test:do_execsql_test(
         -- </func-4.4.1>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-4.4.2",
     [[
         SELECT abs(t1) FROM tbl1
     ]], {
         -- <func-4.4.2>
-        0.0, 0.0, 0.0, 0.0, 0.0
+        1, "Type mismatch: can not convert 'this' (type: text) to number"
         -- </func-4.4.2>
     })
 
@@ -502,13 +502,13 @@ test:do_execsql_test(
         -- </func-4.12>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-4.13",
     [[
         SELECT round(t1,2) FROM tbl1
     ]], {
         -- <func-4.13>
-        0.0, 0.0, 0.0, 0.0, 0.0
+        1, "Type mismatch: can not convert 'this' (type: text) to double"
         -- </func-4.13>
     })
 
@@ -760,13 +760,13 @@ test:do_execsql_test(
         -- </func-5.2>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-5.3",
     [[
         SELECT upper(a), lower(a) FROM t2
     ]], {
         -- <func-5.3>
-        "1","1","","","345","345","","","67890","67890"
+        1, "Type mismatch: can not convert '1' (type: unsigned) to string"
         -- </func-5.3>
     })
 
@@ -794,13 +794,13 @@ test:do_execsql_test(
         -- </func-6.1>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-6.2",
     [[
         SELECT coalesce(upper(a),'nil') FROM t2
     ]], {
         -- <func-6.2>
-        "1","nil","345","nil","67890"
+        1, "Type mismatch: can not convert '1' (type: unsigned) to string"
         -- </func-6.2>
     })
 
@@ -893,7 +893,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "func-8.5",
     [[
-        SELECT sum(x) FROM (SELECT '9223372036' || '854775807' AS x
+        SELECT sum(x) FROM (SELECT CAST('9223372036' || '854775807' AS INTEGER) AS x
                             UNION ALL SELECT -9223372036854775807)
     ]], {
         -- <func-8.5>
@@ -904,7 +904,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "func-8.6",
     [[
-        SELECT typeof(sum(x)) FROM (SELECT '9223372036' || '854775807' AS x
+        SELECT typeof(sum(x)) FROM (SELECT CAST('9223372036' || '854775807' AS INTEGER) AS x
                             UNION ALL SELECT -9223372036854775807)
     ]], {
         -- <func-8.6>
@@ -915,7 +915,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "func-8.7",
     [[
-        SELECT typeof(sum(x)) FROM (SELECT '9223372036' || '854775808' AS x
+        SELECT typeof(sum(x)) FROM (SELECT CAST('9223372036' || '854775808' AS INTEGER) AS x
                             UNION ALL SELECT -9223372036854775807)
     ]], {
         -- <func-8.7>
@@ -926,7 +926,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "func-8.8",
     [[
-        SELECT sum(x)>0.0 FROM (SELECT '9223372036' || '854775808' AS x
+        SELECT sum(x)>0.0 FROM (SELECT CAST('9223372036' || '854775808' AS INTEGER) AS x
                             UNION ALL SELECT -9223372036850000000)
     ]], {
         -- <func-8.8>
@@ -982,14 +982,14 @@ test:do_execsql_test(
         -- </func-9.4>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-9.5",
     [[
         SELECT length(randomblob(32)), length(randomblob(-5)),
                length(randomblob(2000))
     ]], {
         -- <func-9.5>
-        32, "", 2000
+        1, "Type mismatch: can not convert '-5' (type: integer) to unsigned"
         -- </func-9.5>
     })
 
@@ -2918,7 +2918,7 @@ test:do_catchsql_test(
         SELECT ROUND(X'FF')
     ]], {
         -- <func-76.1>
-        1, "Type mismatch: can not convert varbinary to numeric"
+        1, "Type mismatch: can not convert varbinary to double"
         -- </func-76.1>
     })
 
@@ -2928,17 +2928,17 @@ test:do_catchsql_test(
         SELECT RANDOMBLOB(X'FF')
     ]], {
         -- <func-76.2>
-        1, "Type mismatch: can not convert varbinary to numeric"
+        1, "Type mismatch: can not convert varbinary to unsigned"
         -- </func-76.2>
     })
 
-test:do_catchsql_test(
+test:do_execsql_test(
     "func-76.3",
     [[
         SELECT SOUNDEX(X'FF')
     ]], {
         -- <func-76.3>
-        1, "Type mismatch: can not convert varbinary to text"
+        "?000"
         -- </func-76.3>
     })
 

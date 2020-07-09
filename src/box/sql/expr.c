@@ -4055,11 +4055,15 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 			} else {
 				r1 = 0;
 			}
-			if (sql_func_flag_is_set(func, SQL_FUNC_NEEDCOLL)) {
-				sqlVdbeAddOp4(v, OP_CollSeq, 0, 0, 0,
-						  (char *)coll, P4_COLLSEQ);
-			}
 			if (func->def->language == FUNC_LANGUAGE_SQL_BUILTIN) {
+				struct func_sql_builtin *f =
+					(struct func_sql_builtin *)func;
+				sql_emit_func_types(v, &f->args, r1, nFarg);
+				if (sql_func_flag_is_set(func,
+							 SQL_FUNC_NEEDCOLL)) {
+					sqlVdbeAddOp4(v, OP_CollSeq, 0, 0, 0,
+						      (char *)coll, P4_COLLSEQ);
+				}
 				sqlVdbeAddOp4(v, OP_BuiltinFunction0, constMask,
 					      r1, target, (char *)func,
 					      P4_FUNC);

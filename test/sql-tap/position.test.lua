@@ -228,7 +228,7 @@ test:do_test(
         return test:catchsql "SELECT position(34, 12345);"
     end, {
         -- <position-1.23>
-        1, "Inconsistent types: expected text or varbinary got unsigned"
+        1, "Type mismatch: can not convert '34' (type: unsigned) to string"
         -- </position-1.23>
     })
 
@@ -238,7 +238,7 @@ test:do_test(
         return test:catchsql "SELECT position(34, 123456.78);"
     end, {
         -- <position-1.24>
-        1, "Inconsistent types: expected text or varbinary got real"
+        1, "Type mismatch: can not convert '34' (type: unsigned) to string"
         -- </position-1.24>
     })
 
@@ -248,7 +248,7 @@ test:do_test(
         return test:catchsql "SELECT position(x'3334', 123456.78);"
     end, {
         -- <position-1.25>
-        1, "Inconsistent types: expected text or varbinary got real"
+        1, "Type mismatch: can not convert '123456.78' (type: real) to string"
         -- </position-1.25>
     })
 

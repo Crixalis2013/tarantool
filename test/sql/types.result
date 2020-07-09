@@ -215,25 +215,22 @@ box.execute("INSERT INTO t1 VALUES (randomblob(5));")
 box.execute("SELECT * FROM t1 WHERE s LIKE 'blob';")
 ---
 - null
-- 'Inconsistent types: expected text got varbinary'
+- 'Type mismatch: can not convert varbinary to string'
 ...
 box.execute("SELECT * FROM t1 WHERE 'blob' LIKE s;")
 ---
 - null
-- 'Inconsistent types: expected text got varbinary'
+- 'Type mismatch: can not convert varbinary to string'
 ...
 box.execute("SELECT * FROM t1 WHERE 'blob' LIKE x'0000';")
 ---
 - null
-- 'Inconsistent types: expected text got varbinary'
+- 'Type mismatch: can not convert varbinary to string'
 ...
 box.execute("SELECT s LIKE NULL FROM t1;")
 ---
-- metadata:
-  - name: s LIKE NULL
-    type: integer
-  rows:
-  - [null]
+- null
+- 'Type mismatch: can not convert varbinary to string'
 ...
 box.execute("DELETE FROM t1;")
 ---
@@ -246,20 +243,17 @@ box.execute("INSERT INTO t1 VALUES (1);")
 box.execute("SELECT * FROM t1 WHERE s LIKE 'int';")
 ---
 - null
-- 'Inconsistent types: expected text got unsigned'
+- 'Type mismatch: can not convert ''1'' (type: unsigned) to string'
 ...
 box.execute("SELECT * FROM t1 WHERE 'int' LIKE 4;")
 ---
 - null
-- 'Inconsistent types: expected text got unsigned'
+- 'Type mismatch: can not convert ''4'' (type: unsigned) to string'
 ...
 box.execute("SELECT NULL LIKE s FROM t1;")
 ---
-- metadata:
-  - name: NULL LIKE s
-    type: integer
-  rows:
-  - [null]
+- null
+- 'Type mismatch: can not convert ''1'' (type: unsigned) to string'
 ...
 box.space.T1:drop()
 ---
@@ -822,19 +816,13 @@ box.execute("DELETE FROM t WHERE i < 18446744073709551613;")
 ...
 box.execute("SELECT lower(i) FROM t;")
 ---
-- metadata:
-  - name: lower(i)
-    type: string
-  rows:
-  - ['18446744073709551613']
+- null
+- 'Type mismatch: can not convert ''18446744073709551613'' (type: unsigned) to string'
 ...
 box.execute("SELECT upper(i) FROM t;")
 ---
-- metadata:
-  - name: upper(i)
-    type: string
-  rows:
-  - ['18446744073709551613']
+- null
+- 'Type mismatch: can not convert ''18446744073709551613'' (type: unsigned) to string'
 ...
 box.execute("SELECT abs(i) FROM t;")
 ---
@@ -1307,18 +1295,24 @@ box.execute("SELECT group_concat(v) FROM t;")
 ...
 box.execute("SELECT lower(v) FROM t;")
 ---
-- null
-- 'Inconsistent types: expected text got varbinary'
+- metadata:
+  - name: lower(v)
+    type: string
+  rows:
+  - ['abc']
 ...
 box.execute("SELECT upper(v) FROM t;")
 ---
-- null
-- 'Inconsistent types: expected text got varbinary'
+- metadata:
+  - name: upper(v)
+    type: string
+  rows:
+  - ['ABC']
 ...
 box.execute("SELECT abs(v) FROM t;")
 ---
 - null
-- 'Inconsistent types: expected number got varbinary'
+- 'Type mismatch: can not convert varbinary to number'
 ...
 box.execute("SELECT typeof(v) FROM t;")
 ---
@@ -1870,25 +1864,13 @@ box.execute("SELECT group_concat(d) FROM t;")
 ...
 box.execute("SELECT lower(d) FROM t;")
 ---
-- metadata:
-  - name: lower(d)
-    type: string
-  rows:
-  - ['10.0']
-  - ['-2.0']
-  - ['3.3']
-  - ['1.8e+19']
+- null
+- 'Type mismatch: can not convert ''10.0'' (type: real) to string'
 ...
 box.execute("SELECT upper(d) FROM t;")
 ---
-- metadata:
-  - name: upper(d)
-    type: string
-  rows:
-  - ['10.0']
-  - ['-2.0']
-  - ['3.3']
-  - ['1.8E+19']
+- null
+- 'Type mismatch: can not convert ''10.0'' (type: real) to string'
 ...
 box.execute("SELECT abs(d) FROM t;")
 ---

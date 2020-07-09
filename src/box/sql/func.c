@@ -462,13 +462,7 @@ lengthFunc(sql_context * context, int argc, sql_value ** argv)
 	assert(argc == 1);
 	UNUSED_PARAMETER(argc);
 	switch (sql_value_type(argv[0])) {
-	case MP_BIN:
-	case MP_ARRAY:
-	case MP_MAP:
-	case MP_INT:
-	case MP_UINT:
-	case MP_BOOL:
-	case MP_DOUBLE:{
+	case MP_BIN: {
 			sql_result_uint(context, sql_value_bytes(argv[0]));
 			break;
 		}
@@ -481,6 +475,7 @@ lengthFunc(sql_context * context, int argc, sql_value ** argv)
 			break;
 		}
 	default:{
+			assert(sql_value_type(argv[0]) == MP_NIL);
 			sql_result_null(context);
 			break;
 		}
@@ -509,32 +504,16 @@ absFunc(sql_context * context, int argc, sql_value ** argv)
 		sql_result_uint(context, -value);
 		break;
 	}
-	case MP_NIL:{
-			/* IMP: R-37434-19929 Abs(X) returns NULL if X is NULL. */
-			sql_result_null(context);
-			break;
-		}
-	case MP_BOOL:
-	case MP_BIN:
-	case MP_ARRAY:
-	case MP_MAP: {
-		diag_set(ClientError, ER_INCONSISTENT_TYPES, "number",
-			 mem_type_to_str(argv[0]));
-		context->is_aborted = true;
-		return;
+	case MP_DOUBLE: {
+		double rVal = sql_value_double(argv[0]);
+		if (rVal < 0)
+			rVal = -rVal;
+		sql_result_double(context, rVal);
+		break;
 	}
-	default:{
-			/* Because sql_value_double() returns 0.0 if the argument is not
-			 * something that can be converted into a number, we have:
-			 * IMP: R-01992-00519 Abs(X) returns 0.0 if X is a string or blob
-			 * that cannot be converted to a numeric value.
-			 */
-			double rVal = sql_value_double(argv[0]);
-			if (rVal < 0)
-				rVal = -rVal;
-			sql_result_double(context, rVal);
-			break;
-		}
+	default:
+		assert(sql_value_type(argv[0]) == MP_NIL);
+		sql_result_null(context);
 	}
 }
 
@@ -560,22 +539,6 @@ position_func(struct sql_context *context, int argc, struct Mem **argv)
 
 	if (haystack_type == MP_NIL || needle_type == MP_NIL)
 		return;
-	/*
-	 * Position function can be called only with string
-	 * or blob params.
-	 */
-	struct Mem *inconsistent_type_arg = NULL;
-	if (needle_type != MP_STR && needle_type != MP_BIN)
-		inconsistent_type_arg = needle;
-	if (haystack_type != MP_STR && haystack_type != MP_BIN)
-		inconsistent_type_arg = haystack;
-	if (inconsistent_type_arg != NULL) {
-		diag_set(ClientError, ER_INCONSISTENT_TYPES,
-			 "text or varbinary",
-			 mem_type_to_str(inconsistent_type_arg));
-		context->is_aborted = true;
-		return;
-	}
 	/*
 	 * Both params of Position function must be of the same
 	 * type.
@@ -809,6 +772,8 @@ substrFunc(sql_context * context, int argc, sql_value ** argv)
 				      SQL_TRANSIENT);
 	}
 }
+enum field_type func_substr_types[] = {FIELD_TYPE_STRING, FIELD_TYPE_INTEGER,
+				       FIELD_TYPE_INTEGER};
 
 /*
  * Implementation of the round() function
@@ -827,13 +792,6 @@ roundFunc(sql_context * context, int argc, sql_value ** argv)
 	}
 	if (sql_value_is_null(argv[0]))
 		return;
-	enum mp_type mp_type = sql_value_type(argv[0]);
-	if (mp_type_is_bloblike(mp_type)) {
-		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-			 sql_value_to_diag_str(argv[0]), "numeric");
-		context->is_aborted = true;
-		return;
-	}
 	r = sql_value_double(argv[0]);
 	/* If Y==0 and X will fit in a 64-bit int,
 	 * handle the rounding directly,
@@ -849,6 +807,7 @@ roundFunc(sql_context * context, int argc, sql_value ** argv)
 	}
 	sql_result_double(context, r);
 }
+enum field_type func_round_types[] = {FIELD_TYPE_DOUBLE, FIELD_TYPE_UNSIGNED};
 
 /*
  * Allocate nByte bytes of space using sqlMalloc(). If the
@@ -888,13 +847,6 @@ case_type##ICUFunc(sql_context *context, int argc, sql_value **argv)   \
 	const char *z2;                                                        \
 	int n;                                                                 \
 	UNUSED_PARAMETER(argc);                                                \
-	int arg_type = sql_value_type(argv[0]);                                \
-	if (mp_type_is_bloblike(arg_type)) {\
-		diag_set(ClientError, ER_INCONSISTENT_TYPES, "text",           \
-			 "varbinary");                                         \
-		context->is_aborted = true;                                    \
-		return;                                                        \
-	}                                                                      \
 	z2 = (char *)sql_value_text(argv[0]);                              \
 	n = sql_value_bytes(argv[0]);                                      \
 	/*                                                                     \
@@ -970,12 +922,6 @@ randomBlob(sql_context * context, int argc, sql_value ** argv)
 	unsigned char *p;
 	assert(argc == 1);
 	UNUSED_PARAMETER(argc);
-	if (mp_type_is_bloblike(sql_value_type(argv[0]))) {
-		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-			 sql_value_to_diag_str(argv[0]), "numeric");
-		context->is_aborted = true;
-		return;
-	}
 	n = sql_value_int(argv[0]);
 	if (n < 1)
 		return;
@@ -1214,17 +1160,8 @@ likeFunc(sql_context *context, int argc, sql_value **argv)
 	int rhs_type = sql_value_type(argv[0]);
 	int lhs_type = sql_value_type(argv[1]);
 
-	if (lhs_type != MP_STR || rhs_type != MP_STR) {
-		if (lhs_type == MP_NIL || rhs_type == MP_NIL)
-			return;
-		char *inconsistent_type = rhs_type != MP_STR ?
-					  mem_type_to_str(argv[0]) :
-					  mem_type_to_str(argv[1]);
-		diag_set(ClientError, ER_INCONSISTENT_TYPES, "text",
-			 inconsistent_type);
-		context->is_aborted = true;
+	if (lhs_type == MP_NIL || rhs_type == MP_NIL)
 		return;
-	}
 	const char *zB = (const char *) sql_value_text(argv[0]);
 	const char *zA = (const char *) sql_value_text(argv[1]);
 	const char *zB_end = zB + sql_value_bytes(argv[0]);
@@ -1452,10 +1389,8 @@ charFunc(sql_context * context, int argc, sql_value ** argv)
 	for (i = 0; i < argc; i++) {
 		uint64_t x;
 		unsigned c;
-		if (sql_value_type(argv[i]) == MP_INT)
-			x = 0xfffd;
-		else
-			x = sql_value_uint64(argv[i]);
+		assert(sql_value_type(argv[i]) == MP_UINT);
+		x = sql_value_uint64(argv[i]);
 		if (x > 0x10ffff)
 			x = 0xfffd;
 		c = (unsigned)(x & 0x1fffff);
@@ -1853,13 +1788,6 @@ soundexFunc(sql_context * context, int argc, sql_value ** argv)
 		1, 2, 6, 2, 3, 0, 1, 0, 2, 0, 2, 0, 0, 0, 0, 0,
 	};
 	assert(argc == 1);
-	enum mp_type mp_type = sql_value_type(argv[0]);
-	if (mp_type_is_bloblike(mp_type)) {
-		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-			 sql_value_to_diag_str(argv[0]), "text");
-		context->is_aborted = true;
-		return;
-	}
 	zIn = (u8 *) sql_value_text(argv[0]);
 	if (zIn == 0)
 		zIn = (u8 *) "";
@@ -1926,15 +1854,7 @@ sum_step(struct sql_context *context, int argc, sql_value **argv)
 	int type = sql_value_type(argv[0]);
 	if (type == MP_NIL || p == NULL)
 		return;
-	if (type != MP_DOUBLE && type != MP_INT && type != MP_UINT) {
-		if (mem_apply_numeric_type(argv[0]) != 0) {
-			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-				 sql_value_to_diag_str(argv[0]), "number");
-			context->is_aborted = true;
-			return;
-		}
-		type = sql_value_type(argv[0]);
-	}
+	assert(type == MP_DOUBLE || type == MP_INT || type == MP_UINT);
 	p->cnt++;
 	if (type == MP_INT || type == MP_UINT) {
 		int64_t v = sql_value_int64(argv[0]);
@@ -2234,8 +2154,8 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_NUMBER,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_NUMBER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
@@ -2249,8 +2169,8 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_NUMBER,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_NUMBER,
 	 .is_deterministic = false,
@@ -2266,7 +2186,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2281,7 +2201,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2294,8 +2214,8 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = SQL_MAX_FUNCTION_ARG,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_UNSIGNED,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_STRING,
 	 .is_deterministic = true,
@@ -2309,9 +2229,9 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_STRING,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2324,9 +2244,9 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_STRING,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2339,7 +2259,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 2,
 	 .max_count = SQL_MAX_FUNCTION_ARG,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_SCALAR,
@@ -2354,7 +2274,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 1,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_INTEGER,
@@ -2371,7 +2291,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2386,7 +2306,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2401,7 +2321,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2416,7 +2336,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2431,7 +2351,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2446,7 +2366,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2461,7 +2381,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2476,7 +2396,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2491,7 +2411,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2506,7 +2426,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2521,7 +2441,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2534,7 +2454,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 2,
 	 .max_count = SQL_MAX_FUNCTION_ARG,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_SCALAR,
@@ -2549,8 +2469,8 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 1,
 	 .max_count = 2,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_SCALAR,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_GROUP,
@@ -2564,9 +2484,9 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_STRING,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2579,7 +2499,7 @@ static struct {
 	 .param_count = 2,
 	 .min_count = 2,
 	 .max_count = 2,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_INTEGER,
@@ -2596,7 +2516,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2609,7 +2529,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 2,
 	 .max_count = SQL_MAX_FUNCTION_ARG,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_SCALAR,
@@ -2624,9 +2544,9 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_STRING,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2641,7 +2561,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2654,8 +2574,8 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 2,
 	 .max_count = 3,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_STRING,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
@@ -2669,7 +2589,7 @@ static struct {
 	 .param_count = 2,
 	 .min_count = 2,
 	 .max_count = 2,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_BOOLEAN,
@@ -2684,7 +2604,7 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_BOOLEAN,
@@ -2701,7 +2621,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2714,9 +2634,9 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_STRING,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2729,7 +2649,7 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_SCALAR,
@@ -2744,7 +2664,7 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_SCALAR,
@@ -2761,7 +2681,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2774,7 +2694,7 @@ static struct {
 	 .param_count = 2,
 	 .min_count = 2,
 	 .max_count = 2,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_SCALAR,
@@ -2791,7 +2711,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2804,9 +2724,9 @@ static struct {
 	 .param_count = 2,
 	 .min_count = 2,
 	 .max_count = 2,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_STRING,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2821,7 +2741,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2834,7 +2754,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = SQL_MAX_FUNCTION_ARG,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_STRING,
@@ -2849,7 +2769,7 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_STRING,
@@ -2864,7 +2784,7 @@ static struct {
 	 .param_count = 0,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_INTEGER,
@@ -2879,8 +2799,8 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_UNSIGNED,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_VARBINARY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
@@ -2894,9 +2814,9 @@ static struct {
 	 .param_count = 3,
 	 .min_count = 3,
 	 .max_count = 3,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_STRING,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2909,8 +2829,8 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 1,
 	 .max_count = 2,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
+	 .types = func_round_types,
+	 .recurrent_type = field_type_MAX,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
@@ -2924,7 +2844,7 @@ static struct {
 	 .param_count = 0,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_INTEGER,
@@ -2941,7 +2861,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2954,9 +2874,9 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_STRING,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2971,7 +2891,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2986,7 +2906,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -2999,9 +2919,9 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 2,
 	 .max_count = 3,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .types = func_substr_types,
+	 .recurrent_type = field_type_MAX,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -3014,8 +2934,8 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_NUMBER,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_NUMBER,
 	 .aggregate = FUNC_AGGREGATE_GROUP,
@@ -3031,7 +2951,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -3044,8 +2964,8 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_NUMBER,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_NUMBER,
 	 .aggregate = FUNC_AGGREGATE_GROUP,
@@ -3059,7 +2979,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 1,
 	 .max_count = 3,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_STRING,
@@ -3074,7 +2994,7 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_STRING,
@@ -3089,9 +3009,9 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_STRING,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -3104,7 +3024,7 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_BOOLEAN,
@@ -3119,9 +3039,9 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_STRING,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -3134,7 +3054,7 @@ static struct {
 	 .param_count = 0,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_STRING,
@@ -3149,8 +3069,8 @@ static struct {
 	 .param_count = 1,
 	 .min_count = 1,
 	 .max_count = 1,
-	 .types = false,
-	 .recurrent_type = FIELD_TYPE_ANY,
+	 .types = NULL,
+	 .recurrent_type = FIELD_TYPE_UNSIGNED,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_VARBINARY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
@@ -3166,7 +3086,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
@@ -3181,7 +3101,7 @@ static struct {
 	 .param_count = -1,
 	 .min_count = 0,
 	 .max_count = 0,
-	 .types = false,
+	 .types = NULL,
 	 .recurrent_type = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_ANY,
