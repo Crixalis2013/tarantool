@@ -3978,8 +3978,6 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 			zId = pExpr->u.zToken;
 			struct func *func = sql_func_by_signature(zId, nFarg);
 			if (func == NULL) {
-				diag_set(ClientError, ER_NO_SUCH_FUNCTION,
-					 zId);
 				pParse->is_aborted = true;
 				break;
 			}

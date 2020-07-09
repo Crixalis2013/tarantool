@@ -4441,8 +4441,11 @@ sql_func_flag_is_set(struct func *func, uint16_t flag)
  * export field set true and have exactly the same signature
  * are returned.
  *
- * Returns not NULL function pointer when a valid and exported
- * to SQL engine function is found and NULL otherwise.
+ * @param name Name of the function to find.
+ * @param argc Number of arguments of the function.
+ *
+ * @retval not NULL function pointer when a function is found.
+ * @retval NULL on error and sets a diag.
  */
 struct func *
 sql_func_by_signature(const char *name, int argc);

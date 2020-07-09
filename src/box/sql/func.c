@@ -2185,11 +2185,23 @@ struct func *
 sql_func_by_signature(const char *name, int argc)
 {
 	struct func *base = func_by_name(name, strlen(name));
-	if (base == NULL || !base->def->exports.sql)
+	if (base == NULL) {
+		diag_set(ClientError, ER_NO_SUCH_FUNCTION, name);
 		return NULL;
-
-	if (base->def->param_count != -1 && base->def->param_count != argc)
+	}
+	if (!base->def->exports.sql) {
+		diag_set(ClientError, ER_SQL_PARSER_GENERIC,
+			 tt_sprintf("function %s() is not available in SQL",
+				     name));
 		return NULL;
+	}
+	int param_count = base->def->param_count;
+	if (param_count != -1 && param_count != argc) {
+		const char *err = tt_sprintf("%d", param_count);
+		diag_set(ClientError, ER_FUNC_WRONG_ARG_COUNT,
+			 base->def->name, err, argc);
+		return NULL;
+	}
 	return base;
 }
 
