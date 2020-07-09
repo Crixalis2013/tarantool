@@ -4372,11 +4372,20 @@ Expr *sqlExprForVectorField(Parse *, Expr *, int);
  */
 extern int sqlSubProgramsRemaining;
 
+struct sql_func_args {
+	uint32_t min_count;
+	uint32_t max_count;
+	enum field_type *types;
+	enum field_type recurrent_type;
+	bool is_blob_like_str;
+};
+
 struct func_sql_builtin {
 	/** Function object base class. */
 	struct func base;
 	/** A bitmask of SQL flags. */
 	uint16_t flags;
+	struct sql_func_args args;
 	/**
 	 * A VDBE-memory-compatible call method.
 	 * SQL built-ins don't use func base class "call"

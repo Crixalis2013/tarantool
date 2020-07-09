@@ -276,19 +276,19 @@ test:do_catchsql_test(
     "func-5-5.1",
     [[
         SELECT LEAST(false);
-    ]], { 1, "Wrong number of arguments is passed to LEAST(): expected at least two, got 1" } )
+    ]], { 1, "Wrong number of arguments is passed to LEAST(): expected from 2 to 127, got 1" } )
 
 test:do_catchsql_test(
     "func-5-5.2",
     [[
         SELECT GREATEST('abc');
-    ]], { 1, "Wrong number of arguments is passed to GREATEST(): expected at least two, got 1" } )
+    ]], { 1, "Wrong number of arguments is passed to GREATEST(): expected from 2 to 127, got 1" } )
 
 test:do_catchsql_test(
     "func-5-5.3",
     [[
         SELECT LEAST();
-    ]], { 1, "Wrong number of arguments is passed to LEAST(): expected at least two, got 0" } )
+    ]], { 1, "Wrong number of arguments is passed to LEAST(): expected from 2 to 127, got 0" } )
 
 box.func.COUNTER1:drop()
 box.func.COUNTER2:drop()
