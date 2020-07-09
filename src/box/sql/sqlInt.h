@@ -4397,11 +4397,24 @@ Expr *sqlExprForVectorField(Parse *, Expr *, int);
  */
 extern int sqlSubProgramsRemaining;
 
+/**
+ * A structure that contains additional information about
+ * arguments to built-in SQL functions.
+ */
+struct sql_func_args {
+	/** Min number of arguments. */
+	uint32_t min_count;
+	/** Max number of arguments. */
+	uint32_t max_count;
+};
+
 struct func_sql_builtin {
 	/** Function object base class. */
 	struct func base;
 	/** A bitmask of SQL flags. */
 	uint16_t flags;
+	/** Information about arguments to built-in functions. */
+	struct sql_func_args args;
 	/**
 	 * A VDBE-memory-compatible call method.
 	 * SQL built-ins don't use func base class "call"

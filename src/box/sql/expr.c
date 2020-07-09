@@ -3987,14 +3987,7 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 			 */
 			if (sql_func_flag_is_set(func, SQL_FUNC_COALESCE)) {
 				int endCoalesce = sqlVdbeMakeLabel(v);
-				if (nFarg < 2) {
-					diag_set(ClientError,
-						 ER_FUNC_WRONG_ARG_COUNT,
-						 func->def->name,
-						 "at least two", nFarg);
-					pParse->is_aborted = true;
-					break;
-				}
+				assert(nFarg >= 2);
 				sqlExprCode(pParse, pFarg->a[0].pExpr,
 						target);
 				for (i = 1; i < nFarg; i++) {
@@ -4017,14 +4010,7 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 			 * of the first argument.
 			 */
 			if (sql_func_flag_is_set(func, SQL_FUNC_UNLIKELY)) {
-				if (nFarg < 1) {
-					diag_set(ClientError,
-						 ER_FUNC_WRONG_ARG_COUNT,
-						 func->def->name,
-						 "at least one", nFarg);
-					pParse->is_aborted = true;
-					break;
-				}
+				assert(nFarg == 1 || nFarg == 2);
 				return sqlExprCodeTarget(pParse,
 							     pFarg->a[0].pExpr,
 							     target);
